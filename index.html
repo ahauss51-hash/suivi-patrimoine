@@ -1,0 +1,1873 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Suivi Patrimoine</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --navy: #0B1220;
+    --navy-light: #131C2E;
+    --navy-lighter: #1A2436;
+    --border: #22304A;
+    --text: #E8EDF4;
+    --muted: #8B98AC;
+    --gold: #C7A34C;
+    --green: #4ADE80;
+    --red: #FB7185;
+    --purple: #A78BFA;
+    --blue: #60A5FA;
+    --orange: #F59E0B;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--navy);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .app { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+
+  header {
+    flex: 0 0 auto;
+    padding: 16px 18px 14px;
+    background: var(--navy-light);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header .row { display: flex; align-items: center; justify-content: space-between; }
+  h1 { font-size: 17px; font-weight: 700; margin: 0; letter-spacing: 0.2px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 7px; box-shadow: 0 0 6px var(--green); }
+  .update-time { font-size: 10.5px; color: var(--muted); margin-top: 3px; margin-left: 14px; }
+
+  main { flex: 1 1 auto; padding: 16px 16px 90px; overflow-y: auto; }
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px);} to { opacity:1; transform: translateY(0);} }
+
+  /* Cards */
+  .hero {
+    background: linear-gradient(135deg, var(--navy-lighter), var(--navy-light));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+  .hero .label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .hero .value { font-size: 32px; font-weight: 700; margin-top: 6px; letter-spacing: -0.5px; }
+  .hero .value.pos { color: var(--green); }
+  .hero .value.neg { color: var(--red); }
+  .hero .sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .hero .sub b.pos { color: var(--green); }
+  .hero .sub b.neg { color: var(--red); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+  }
+  .card .tag { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .tag.cto { color: var(--blue); }
+  .tag.pea { color: var(--purple); }
+  .swatch { width: 8px; height: 8px; border-radius: 2px; }
+  .swatch.cto { background: var(--blue); }
+  .swatch.pea { background: var(--purple); }
+  .tag.crypto { color: var(--orange); }
+  .swatch.crypto { background: var(--orange); }
+  /* 3e carte (Crypto) : pleine largeur sous les deux autres */
+  .card.full { grid-column: 1 / -1; }
+  .direct-split.single { grid-template-columns: 1fr; }
+  .card .line { display: flex; justify-content: space-between; font-size: 12.5px; padding: 4px 0; color: var(--muted); }
+  .card .line b { color: var(--text); font-weight: 600; }
+  .card .line b.pos { color: var(--green); }
+  .card .line b.neg { color: var(--red); }
+
+  /* Lien externe (Hiboo) */
+  .ext-link {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--navy-light); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px 16px; margin-top: 14px;
+    text-decoration: none; color: var(--text); font-size: 13px; font-weight: 600;
+  }
+  .ext-link:active { background: var(--navy-lighter); }
+  .ext-link .ext-left { display: flex; align-items: center; gap: 10px; }
+  .ext-link .ext-icon { color: var(--gold); }
+
+  section-title, .section-title {
+    display: block; font-size: 13px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.6px; margin: 18px 0 10px;
+  }
+
+  .segmented {
+    display: flex; background: var(--navy-lighter); border-radius: 10px;
+    padding: 3px; margin-bottom: 14px; border: 1px solid var(--border);
+  }
+  .segmented button {
+    flex: 1; background: transparent; border: 0; color: var(--muted);
+    font-size: 13px; font-weight: 600; padding: 9px 0; border-radius: 8px;
+  }
+  .segmented button.active { background: var(--navy-light); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+  .chart-card {
+    background: var(--navy-light); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 14px;
+  }
+  .chart-card h3 { font-size: 13px; margin: 0 0 12px; color: var(--text); font-weight: 600; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  .legend-list { margin-top: 14px; }
+  .legend-item { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .legend-item:last-child { border-bottom: none; }
+  .legend-left { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .legend-right { text-align: right; }
+  .legend-right .amt { font-weight: 600; color: var(--text); }
+  .legend-right .pct { font-size: 11px; color: var(--muted); margin-left: 6px; }
+
+  .position-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 11px 0; border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+  .position-item:last-child { border-bottom: none; }
+  .position-name { font-size: 13px; font-weight: 600; }
+  .position-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .position-amt { font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
+
+  nav.tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; background: var(--navy-light); border-top: 1px solid var(--border);
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  nav.tabbar button {
+    flex: 1; background: transparent; border: 0; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    font-size: 10px; padding: 4px 0;
+  }
+  nav.tabbar button.active { color: var(--gold); }
+  nav.tabbar svg { width: 20px; height: 20px; }
+
+  button.refresh-btn {
+    background: var(--navy); border: 1px solid var(--border); color: var(--gold);
+    width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  }
+  button.refresh-btn.spin svg { animation: spin 0.7s linear; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* --- Onglet Direct --- */
+  .direct-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+  .pct-badge {
+    font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 8px; display: inline-block;
+  }
+  .pct-badge.up { background: rgba(74,222,128,0.14); color: var(--green); }
+  .pct-badge.down { background: rgba(251,113,133,0.14); color: var(--red); }
+  .pct-badge.flat { background: rgba(139,152,172,0.14); color: var(--muted); }
+  .direct-sub { font-size: 11px; color: var(--muted); }
+  /* Lignes de pourcentage de la colonne de droite : empilées, jamais coupées.
+     Classe dédiée pour ne pas affecter la note sous le graphique, qui est un
+     texte long devant pouvoir passer à la ligne. */
+  .pct-line {
+    font-size: 11px; color: var(--muted);
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 5px; justify-content: flex-end;
+  }
+  .warn-box {
+    background: rgba(251,113,133,0.08); border: 1px solid rgba(251,113,133,0.3);
+    border-radius: 12px; padding: 14px; font-size: 12px; color: var(--text); line-height: 1.6;
+    margin-bottom: 14px;
+  }
+  .warn-box code { color: var(--gold); font-size: 11px; }
+
+  /* Deux colonnes côte à côte sur écran large, empilées sur mobile —
+     les lignes de position sont trop denses pour tenir en 2 colonnes sur téléphone. */
+  .direct-split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 760px) { .direct-split { grid-template-columns: 1fr; } }
+  .group-total { float: right; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .empty-group { font-size: 12px; color: var(--muted); padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="row">
+      <div>
+        <h1><span class="dot"></span>Suivi Patrimoine</h1>
+      </div>
+      <button class="refresh-btn" id="refreshBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+      </button>
+    </div>
+    <div class="update-time" id="updateTime">Connexion aux données…</div>
+  </header>
+
+  <main>
+    <!-- PATRIMOINE -->
+    <div class="view active" id="view-patrimoine">
+      <div id="patWarn"></div>
+      <div class="hero">
+        <div class="label">Patrimoine total</div>
+        <div class="value" id="pat-total">—</div>
+        <div class="sub" id="pat-var">&nbsp;</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag" style="color:var(--green)"><span class="swatch" style="background:var(--green)"></span>Épargne</div>
+          <div class="line"><span>Livrets & comptes</span><b id="pat-epargne">—</b></div>
+          <div class="line"><span>Assurance vie</span><b id="pat-av">—</b></div>
+          <div class="line"><span>Part du total</span><b id="pat-epargne-pct">—</b></div>
+        </div>
+        <div class="card">
+          <div class="tag" style="color:var(--purple)"><span class="swatch" style="background:var(--purple)"></span>Marchés</div>
+          <div class="line"><span>PEA + CTO</span><b id="pat-bourse">—</b></div>
+          <div class="line"><span>Crypto</span><b id="pat-crypto">—</b></div>
+          <div class="line"><span>Part du total</span><b id="pat-marches-pct">—</b></div>
+        </div>
+        <div class="card full">
+          <div class="tag" style="color:var(--gold)"><span class="swatch" style="background:var(--gold)"></span>Disponibilité</div>
+          <div class="line"><span>Disponible immédiatement</span><b id="pat-dispo">—</b></div>
+          <div class="line"><span>Sous conditions</span><b id="pat-cond">—</b></div>
+          <div class="line"><span>Bloqué</span><b id="pat-bloque">—</b></div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Répartition par classe d'actif</h3>
+        <div class="chart-wrap"><canvas id="chartClasses"></canvas></div>
+        <div class="legend-list" id="legendClasses"></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Mes comptes</h3>
+        <div id="patComptes"></div>
+      </div>
+
+      <div class="chart-card">
+        <h3>Évolution mensuelle</h3>
+        <div class="chart-wrap" style="height:260px;"><canvas id="chartPatrimoine"></canvas></div>
+        <div class="direct-sub" id="patHistNote" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- BOURSE (ancien Résumé) -->
+    <div class="view" id="view-overview">
+      <div class="hero">
+        <div class="label">Gain cumulé total (CT + PEA + Crypto)</div>
+        <div class="value pos" id="totalGain">—</div>
+        <div class="sub">Après impôt : <span id="totalGainNet">—</span></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag cto"><span class="swatch cto"></span>Compte-Titres</div>
+          <div class="line"><span>Lignes achetées</span><b id="ct-lignes">—</b></div>
+          <div class="line"><span>Capital investi</span><b id="ct-capital">—</b></div>
+          <div class="line"><span>dont frais</span><b id="ct-frais">—</b></div>
+          <div class="line"><span>Ventes</span><b id="ct-ventes">—</b></div>
+          <div class="line"><span>Gain réalisé</span><b class="pos" id="ct-gain">—</b></div>
+          <div class="line"><span>Après impôt</span><b class="pos" id="ct-gain-net">—</b></div>
+        </div>
+        <div class="card">
+          <div class="tag pea"><span class="swatch pea"></span>PEA</div>
+          <div class="line"><span>Lignes achetées</span><b id="pea-lignes">—</b></div>
+          <div class="line"><span>Capital investi</span><b id="pea-capital">—</b></div>
+          <div class="line"><span>dont frais</span><b id="pea-frais">—</b></div>
+          <div class="line"><span>Ventes</span><b id="pea-ventes">—</b></div>
+          <div class="line"><span>Gain réalisé</span><b class="pos" id="pea-gain">—</b></div>
+          <div class="line"><span>Après impôt</span><b class="pos" id="pea-gain-net">—</b></div>
+        </div>
+        <div class="card full">
+          <div class="tag crypto"><span class="swatch crypto"></span>Crypto</div>
+          <div class="line"><span>Lignes achetées</span><b id="cr-lignes">—</b></div>
+          <div class="line"><span>Capital investi (frais inclus)</span><b id="cr-capital">—</b></div>
+          <div class="line"><span>dont frais</span><b id="cr-frais">—</b></div>
+          <div class="line"><span>Ventes</span><b id="cr-ventes">—</b></div>
+          <div class="line"><span>Gain réalisé</span><b class="pos" id="cr-gain">—</b></div>
+          <div class="line"><span>Après impôt (PFU 30 %)</span><b class="pos" id="cr-gain-net">—</b></div>
+        </div>
+      </div>
+
+      <span class="section-title">Valeur actuelle du portefeuille</span>
+      <div class="chart-card">
+        <div class="line" style="padding:4px 0;"><span>Compte-Titres : </span><b id="ct-restant">—</b></div>
+        <div class="line" style="padding:4px 0;"><span>PEA : </span><b id="pea-restant">—</b></div>
+        <div class="line" style="padding:4px 0;"><span>Crypto : </span><b id="cr-restant">—</b></div>
+        <div class="line" style="padding:8px 0 0; border-top: 1px solid var(--border); margin-top:6px;"><span><b style="color:var(--text)">Total : </b></span><b style="font-size:15px;" id="total-restant">—</b></div>
+      </div>
+
+      <a class="ext-link" href="https://plateforme.hiboo.expert/#/graphs" target="_blank" rel="noopener">
+        <span class="ext-left">
+          <svg class="ext-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 20V10M12 20V4M6 20v-6"></path>
+          </svg>
+          Ouvrir Hiboo.expert
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 17L17 7M7 7h10v10"></path>
+        </svg>
+      </a>
+    </div>
+
+    <!-- REPARTITION -->
+    <div class="view" id="view-repartition">
+      <div class="segmented" id="accountSeg">
+        <button class="active" data-account="global">Global</button>
+        <button data-account="cto">Compte-Titres</button>
+        <button data-account="pea">PEA</button>
+      </div>
+
+      <div class="chart-card">
+        <h3 id="titleSecteur">Répartition par secteur</h3>
+        <div class="chart-wrap"><canvas id="chartSecteur"></canvas></div>
+        <div class="legend-list" id="legendSecteur"></div>
+      </div>
+
+      <div class="chart-card">
+        <h3 id="titleGeo">Répartition géographique</h3>
+        <div class="chart-wrap"><canvas id="chartGeo"></canvas></div>
+        <div class="legend-list" id="legendGeo"></div>
+      </div>
+      <div class="direct-sub" id="repNote"></div>
+    </div>
+
+    <!-- EVOLUTION -->
+    <div class="view" id="view-evolution">
+      <div class="chart-card">
+        <h3>Gain cumulé dans le temps</h3>
+        <div class="chart-wrap" style="height:260px;"><canvas id="chartEvolution"></canvas></div>
+      </div>
+      <span class="section-title">Historique des ventes</span>
+      <div class="chart-card" id="salesHistory"></div>
+    </div>
+
+    <!-- DIRECT -->
+    <div class="view" id="view-direct">
+      <div id="directWarn"></div>
+
+      <div class="chart-card">
+        <h3 id="latentTitle">Plus/moins-values latentes dans le temps</h3>
+        <div class="chart-wrap" style="height:260px;"><canvas id="chartLatent"></canvas></div>
+        <div class="direct-sub" id="latentNote" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="hero">
+        <div class="label">Valeur actuelle des positions</div>
+        <div class="value" id="live-total-valeur">—</div>
+        <div class="sub">Plus/moins-value latente : <b id="live-total-gain">—</b> <span id="live-total-pct"></span></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="tag cto"><span class="swatch cto"></span>Compte-Titres</div>
+          <div class="line"><span>Valeur actuelle</span><b id="live-ct-valeur">—</b></div>
+          <div class="line"><span>Investi restant</span><b id="live-ct-investi">—</b></div>
+          <div class="line"><span>Latent</span><b id="live-ct-gain">—</b></div>
+        </div>
+        <div class="card">
+          <div class="tag pea"><span class="swatch pea"></span>PEA</div>
+          <div class="line"><span>Valeur actuelle</span><b id="live-pea-valeur">—</b></div>
+          <div class="line"><span>Investi restant</span><b id="live-pea-investi">—</b></div>
+          <div class="line"><span>Latent</span><b id="live-pea-gain">—</b></div>
+        </div>
+        <div class="card full">
+          <div class="tag crypto"><span class="swatch crypto"></span>Crypto <span id="live-cr-src" style="font-weight:500;text-transform:none;color:var(--muted);letter-spacing:0;"></span></div>
+          <div class="line"><span>Valeur actuelle</span><b id="live-cr-valeur">—</b></div>
+          <div class="line"><span>Investi restant</span><b id="live-cr-investi">—</b></div>
+          <div class="line"><span>Latent</span><b id="live-cr-gain">—</b></div>
+        </div>
+      </div>
+
+      <div class="segmented" id="directSeg">
+        <button class="active" data-account="cto">Compte-Titres</button>
+        <button data-account="pea">PEA</button>
+        <button data-account="crypto">Crypto</button>
+      </div>
+
+      <div class="direct-split" id="directSplit">
+        <div class="chart-card">
+          <h3><span id="titleActions">Actions</span> <span class="group-total" id="totalActions"></span></h3>
+          <div id="directListActions"></div>
+        </div>
+        <div class="chart-card" id="cardEtf">
+          <h3>ETF <span class="group-total" id="totalEtf"></span></h3>
+          <div id="directListEtf"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="tabbar">
+    <button class="active" data-view="patrimoine">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-6 9 6"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+      Patrimoine
+    </button>
+    <button data-view="overview">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+      Bourse
+    </button>
+    <button data-view="direct">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      Direct
+    </button>
+    <button data-view="repartition">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v9l7 4"></path></svg>
+      Répartition
+    </button>
+    <button data-view="evolution">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 6"></polyline></svg>
+      Évolution
+    </button>
+  </nav>
+</div>
+
+
+<script>
+/* ==================== SOURCES DE DONNÉES ====================
+   Liens CSV publiés depuis Google Sheets (Fichier > Partager > Publier sur le web). */
+/* ============ A MODIFIER APRES CHAQUE IMPORT DU CLASSEUR ============
+   1) PUB : le lien "Publier sur le web" du classeur, jusqu'a "/pub" (sans ce qui suit).
+   2) GID : pour chaque feuille, le nombre qui suit "#gid=" dans la barre d'adresse
+      quand tu cliques sur l'onglet de la feuille dans Google Sheets.
+   Une valeur laissee a 'A_REMPLIR' est signalee clairement sur la page. */
+const PUB = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR2Ql6eBQvYayxsCEEC-qaWeCE0tUD2CVaqrkJW0SWhgB78xjtm_D83JiHrDhltnWvPS6u3mFdSYDLy/pub";
+const GID = {
+  tableau:    '1638000015',   // feuille "Tableau de bord"
+  ct:         '1266509289',   // feuille "Compte-Titres"
+  pea:        '211326472',   // feuille "PEA"
+  crypto:     '148683002',   // feuille "Crypto"
+  comptes:    '241268954',   // feuille "Comptes"
+  direct:     '145186717',   // feuille "Suivi direct"
+  historique: '263962098'    // feuille "Historique Latent"
+};
+const NOMS_FEUILLES = { tableau: 'Tableau de bord', ct: 'Compte-Titres', pea: 'PEA', crypto: 'Crypto',
+                        comptes: 'Comptes', direct: 'Suivi direct', historique: 'Historique Latent' };
+const CSV_URLS = Object.fromEntries(Object.entries(GID).map(([k, g]) =>
+  [k, `${PUB}?gid=${g}&single=true&output=csv`]));
+const gidManquant = k => !/^\d+$/.test(String(GID[k]).trim());
+
+/* ==================== COURS CRYPTO EN DIRECT ====================
+   Les cours crypto viennent de l'API publique CoinGecko (gratuite, sans clé,
+   appelable depuis le navigateur) : cotation 24h/24, bien plus réactive que
+   GOOGLEFINANCE. Si CoinGecko ne répond pas, repli sur les lignes crypto|NOM de
+   la feuille "Suivi direct".
+   Le nom saisi en colonne A de la feuille Crypto est rapproché d'un identifiant
+   CoinGecko via cette table (ajoute une ligne pour chaque nouvelle crypto). */
+const COINGECKO_IDS = {
+  'bitcoin': 'bitcoin', 'btc': 'bitcoin',
+  'solana': 'solana', 'sol': 'solana',
+  'ethereum': 'ethereum', 'eth': 'ethereum'
+};
+const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+const TAUX_IMPOT_CRYPTO = 0.30; // PFU sur les plus-values d'actifs numériques
+
+let DATA = null;
+
+function parseNum(v) {
+  if (v === undefined || v === null) return 0;
+  let raw = String(v).trim();
+  if (raw === '') return 0;
+  const isPercent = raw.includes('%');
+  // Strip currency symbols, percent sign, and all spaces (incl. non-breaking space)
+  let s = raw.replace(/[€$£%\s\u00A0]/g, '');
+  if (s === '' || s === '-') return 0;
+  const hasComma = s.includes(',');
+  const hasDot = s.includes('.');
+  if (hasComma && hasDot) {
+    // French format: '.' = thousands separator, ',' = decimal separator
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma && !hasDot) {
+    // ',' used as decimal separator
+    s = s.replace(',', '.');
+  }
+  s = s.replace(/[^0-9.\-]/g, '');
+  let n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  if (isPercent) n = n / 100;
+  return n;
+}
+
+// Comme parseNum, mais distingue "cellule vide / erreur" de la valeur 0 —
+// indispensable pour ne pas afficher "0,00 %" quand GOOGLEFINANCE ne renvoie rien.
+function parseNumOrNull(v) {
+  if (v === undefined || v === null) return null;
+  const raw = String(v).trim();
+  if (raw === '' || raw === '-' || raw.startsWith('#')) return null;
+  const n = parseNum(v);
+  return isNaN(n) ? null : n;
+}
+
+function extractDateParts(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return { iso: `${m[1]}-${m[2]}-${m[3]}` };
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return { a: parseInt(m[1], 10), b: parseInt(m[2], 10), year: m[3] };
+  return null;
+}
+
+// Determine whether a column of ambiguous D/M/Y-or-M/D/Y strings is French (D/M/Y)
+// or US (M/D/Y) by looking for at least one unambiguous value in the whole column
+// (e.g. "22/6/2026" can only be day=22 → D/M/Y).
+function detectDateFormat(rawValues) {
+  let sawFirstOver12 = false;
+  let sawSecondOver12 = false;
+  for (const v of rawValues) {
+    const p = extractDateParts(v);
+    if (!p || p.iso) continue;
+    if (p.a > 12) sawFirstOver12 = true;
+    if (p.b > 12) sawSecondOver12 = true;
+  }
+  if (sawFirstOver12 && !sawSecondOver12) return 'DMY';
+  if (sawSecondOver12 && !sawFirstOver12) return 'MDY';
+  return 'MDY'; // fully ambiguous column: default to US format (Google's usual export)
+}
+
+function parseDateWithFormat(v, format) {
+  const p = extractDateParts(v);
+  if (!p) return null;
+  if (p.iso) return p.iso;
+  const month = format === 'DMY' ? p.b : p.a;
+  const day = format === 'DMY' ? p.a : p.b;
+  return `${p.year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+async function fetchCsv(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  const parsed = Papa.parse(text, { skipEmptyLines: true });
+  return parsed.data; // array of arrays
+}
+
+function findRow(rows, label) {
+  const target = label.toLowerCase();
+  return rows.find(r => r[1] && String(r[1]).trim().toLowerCase() === target);
+}
+
+function parseTableauDeBord(rows) {
+  const lignes = findRow(rows, 'Nombre de lignes');
+  const capital = findRow(rows, 'Capital total investi');
+  const ventes = findRow(rows, 'Nombre de ventes');
+  const recupere = findRow(rows, 'Capital récupéré');
+  const gain = findRow(rows, 'Gain / Perte réalisé');
+  const gainNet = findRow(rows, 'Gain après impôt');
+  const gainCumule = findRow(rows, 'Gain cumulé CT + PEA');
+
+  return {
+    ct: {
+      lignes: lignes ? parseNum(lignes[2]) : 0,
+      capital: capital ? parseNum(capital[2]) : 0,
+      ventes: ventes ? parseNum(ventes[2]) : 0,
+      recupere: recupere ? parseNum(recupere[2]) : 0,
+      gain: gain ? parseNum(gain[2]) : 0,
+      gainNet: gainNet ? parseNum(gainNet[2]) : 0
+    },
+    pea: {
+      lignes: lignes ? parseNum(lignes[3]) : 0,
+      capital: capital ? parseNum(capital[3]) : 0,
+      ventes: ventes ? parseNum(ventes[3]) : 0,
+      recupere: recupere ? parseNum(recupere[3]) : 0,
+      gain: gain ? parseNum(gain[3]) : 0,
+      gainNet: gainNet ? parseNum(gainNet[3]) : 0
+    },
+    gainCumule: gainCumule ? parseNum(gainCumule[2]) : 0
+  };
+}
+
+/* Rapprochement des noms entre l'onglet PEA/Compte-Titres et la feuille "Suivi direct".
+   Les deux sont saisis à la main : un espace double, une espace insécable ou un tiret
+   typographique (– —) au lieu du tiret simple suffirait sinon à casser la correspondance. */
+function normKey(s) {
+  return String(s == null ? '' : s)
+    .replace(/[\u2010-\u2015\u2212]/g, '-')   // tirets typographiques -> tiret simple
+    .replace(/[\s\u00A0]+/g, ' ')             // espaces multiples / insécables -> espace simple
+    .trim()
+    .toLowerCase();
+}
+
+/* Feuille "Suivi direct" :
+   A = Clé (cto|NOM ou pea|NOM), B = Ticker, C = Cours natif, D = Devise,
+   E = Cours en EUR, F = % depuis ouverture, G = % depuis achat.
+   Les colonnes sont repérées par leur en-tête, pas par leur position, pour que
+   l'ajout d'une colonne dans la feuille ne casse pas la lecture. */
+function parseSuiviDirect(rows) {
+  const map = {};
+  if (!rows || rows.length < 2) return map;
+
+  const headerIdx = rows.findIndex(r =>
+    r.some(c => c && String(c).trim().toLowerCase().startsWith('clé'))
+  );
+  if (headerIdx === -1) return map;
+
+  const header = rows[headerIdx].map(c => (c ? String(c).trim().toLowerCase() : ''));
+  const findCol = (...needles) =>
+    header.findIndex(h => needles.some(n => h.includes(n)));
+
+  const colKey     = findCol('clé');
+  const colTicker  = findCol('ticker');
+  const colEur     = findCol('cours en eur', 'eur');
+  const colNatif   = findCol('cours natif', 'natif');
+  const colDevise  = findCol('devise');
+  const colPctOuv  = findCol('ouverture');
+  const colPctAch  = findCol('achat');
+  const colType    = findCol('type');
+
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) continue;
+    const key = colKey !== -1 && r[colKey] ? String(r[colKey]).trim() : '';
+    if (!key || key.indexOf('|') === -1) continue;
+
+    map[normKey(key)] = {
+      ticker:   colTicker !== -1 ? (r[colTicker] || '') : '',
+      cours:    colEur !== -1 ? parseNumOrNull(r[colEur]) : null,
+      natif:    colNatif !== -1 ? parseNumOrNull(r[colNatif]) : null,
+      devise:   colDevise !== -1 ? (r[colDevise] || '') : '',
+      pctOuv:   colPctOuv !== -1 ? parseNumOrNull(r[colPctOuv]) : null,
+      pctAchat: colPctAch !== -1 ? parseNumOrNull(r[colPctAch]) : null,
+      type:     colType !== -1 ? (r[colType] || '') : ''
+    };
+  }
+  return map;
+}
+
+function parseJournalSheet(rows) {
+  const headerIdx = rows.findIndex(r => r[0] && String(r[0]).trim().toLowerCase().startsWith('nom'));
+  if (headerIdx === -1) return { positions: [], ventes: [] };
+  const headerRow = rows[headerIdx];
+
+  // Find where the second "Nom / Ticker" (ventes table) starts — the gap between
+  // the two side-by-side tables isn't always the same width across sheets.
+  let ventesCol = -1;
+  for (let c = 1; c < headerRow.length; c++) {
+    if (headerRow[c] && String(headerRow[c]).trim().toLowerCase().startsWith('nom')) { ventesCol = c; break; }
+  }
+
+  const positions = [];
+  const ventes = [];
+  // Totaux de la partie achats (utilisés pour la carte Crypto, calculée côté page)
+  const stats = { lignes: 0, capital: 0, frais: 0 };
+
+  // First pass: collect raw "Date vente" values to determine the column's date format
+  const rawVenteDates = [];
+  const rawAchatDates = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) break;
+    if (ventesCol !== -1 && r[ventesCol + 3]) rawVenteDates.push(r[ventesCol + 3]);
+    if (r[0] && r[1]) rawAchatDates.push(r[1]);
+  }
+  const venteDateFormat = detectDateFormat(rawVenteDates);
+  const achatDateFormat = detectDateFormat(rawAchatDates);
+  // La colonne K est "Frais (€)" dans la feuille Crypto (et "Note" ailleurs) :
+  // on ne la lit comme un montant que si son en-tête le dit.
+  const fraisCol = headerRow[10] && normKey(headerRow[10]).startsWith('frais') ? 10 : -1;
+
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r) break;
+
+    // Achats side (cols 0-10)
+    const nom = r[0] ? String(r[0]).trim() : '';
+    if (nom !== '' && !/^total/i.test(nom)) {
+      const qteRestante = parseNum(r[8]);
+      const montantRestant = parseNum(r[9]);
+      stats.lignes++;
+      stats.capital += parseNum(r[4]);
+      if (fraisCol !== -1) stats.frais += parseNum(r[fraisCol]);
+      if (montantRestant > 0) {
+        positions.push({
+          nom,
+          date: parseDateWithFormat(r[1], achatDateFormat),
+          secteur: r[5] ? String(r[5]).trim() : '',
+          geo: r[6] ? String(r[6]).trim() : '',
+          montant: montantRestant,
+          qte: qteRestante
+        });
+      }
+    }
+
+    // Ventes side — columns located relative to the detected ventes header position
+    let nomVente = '';
+    if (ventesCol !== -1) {
+      nomVente = r[ventesCol] ? String(r[ventesCol]).trim() : '';
+      if (nomVente !== '') {
+        const dateVente = parseDateWithFormat(r[ventesCol + 3], venteDateFormat);
+        const g = parseNum(r[ventesCol + 8]);
+        if (dateVente) {
+          ventes.push({ date: dateVente, action: nomVente, gain: g });
+        }
+      }
+    }
+
+
+    // Stop scanning once both sides are clearly exhausted
+    const achatsEmpty = nom === '';
+    const ventesEmpty = nomVente === '';
+    if (achatsEmpty && ventesEmpty && i > headerIdx + 3) {
+      // allow a couple of blank rows in case of formatting gaps, then stop
+      const next1 = rows[i + 1];
+      const next2 = rows[i + 2];
+      const stillEmpty = (!next1 || (!next1[0] && !next1[ventesCol])) && (!next2 || (!next2[0] && !next2[ventesCol]));
+      if (stillEmpty) break;
+
+    }
+  }
+  return { positions, ventes, stats };
+}
+
+function buildEvolution(ventes) {
+  const sorted = [...ventes].sort((a, b) => new Date(a.date) - new Date(b.date));
+  let cumule = 0;
+  return sorted.map(v => {
+    cumule += v.gain;
+    return { date: v.date, action: v.action, gain: v.gain, cumule };
+  });
+}
+
+async function loadAllData() {
+  const manquants = ['tableau', 'ct', 'pea'].filter(gidManquant);
+  if (manquants.length) {
+    throw new Error('gid à renseigner dans le code pour : ' + manquants.map(k => NOMS_FEUILLES[k]).join(', '));
+  }
+  const [tableauRows, ctRows, peaRows] = await Promise.all([
+    fetchCsv(CSV_URLS.tableau),
+    fetchCsv(CSV_URLS.ct),
+    fetchCsv(CSV_URLS.pea)
+  ]);
+
+  // Feuille "Comptes" : chargée à part, le reste de l'app doit fonctionner sans elle.
+  let comptes = [], comptesError = null;
+  if (gidManquant('comptes')) {
+    comptesError = 'lien-non-configuré';
+  } else {
+    try {
+      comptes = parseComptes(await fetchCsv(CSV_URLS.comptes));
+      if (!comptes.length) comptesError = 'feuille-vide';
+    } catch (err) {
+      comptesError = err.message;
+    }
+  }
+
+  // La feuille "Suivi direct" est chargée à part : si elle échoue (lien pas encore
+  // renseigné, feuille non publiée), le reste de l'app doit continuer à fonctionner.
+  let direct = {}, directError = null;
+  if (gidManquant('direct')) {
+    directError = 'lien-non-configuré';
+  } else {
+    try {
+      direct = parseSuiviDirect(await fetchCsv(CSV_URLS.direct));
+      if (Object.keys(direct).length === 0) directError = 'feuille-vide';
+    } catch (err) {
+      directError = err.message;
+    }
+  }
+
+  // Chargée à part, comme "Suivi direct" : une feuille non publiée ne doit pas
+  // faire tomber le reste de l'app.
+  let historique = [], historiqueError = null;
+  try {
+    if (gidManquant('historique')) throw new Error('gid à renseigner dans le code');
+    historique = parseHistoriqueLatent(await fetchCsv(CSV_URLS.historique));
+  } catch (err) {
+    historiqueError = err.message;
+  }
+
+  // Feuille "Crypto" : chargée à part elle aussi.
+  let cryptoJournal = { positions: [], ventes: [], stats: { lignes: 0, capital: 0, frais: 0 } };
+  let cryptoError = null;
+  if (gidManquant('crypto')) {
+    cryptoError = 'lien-non-configuré';
+  } else {
+    try {
+      cryptoJournal = parseJournalSheet(await fetchCsv(CSV_URLS.crypto));
+    } catch (err) {
+      cryptoError = err.message;
+    }
+  }
+
+  // Cours et historique CoinGecko pour les cryptos détenues
+  const ids = [...new Set(cryptoJournal.positions.map(p => cgId(p.nom)).filter(Boolean))];
+  let cryptoQuotes = {}, cryptoHistory = {}, cryptoLiveError = null;
+  if (ids.length) {
+    try {
+      cryptoQuotes = await fetchCryptoQuotes(ids);
+    } catch (err) {
+      cryptoLiveError = err.message;
+    }
+    try {
+      const debut = cryptoJournal.positions.map(p => p.date).filter(Boolean).sort()[0];
+      const jours = debut ? Math.ceil((Date.now() - new Date(debut)) / 86400000) + 1 : 30;
+      cryptoHistory = await fetchCryptoHistory(ids, Math.min(Math.max(jours, 2), 365));
+    } catch (err) {
+      console.warn('Historique CoinGecko indisponible', err);
+    }
+  }
+
+  const tableau = parseTableauDeBord(tableauRows);
+  const ctJournal = parseJournalSheet(ctRows);
+  const peaJournal = parseJournalSheet(peaRows);
+
+  return {
+    tableau,
+    evolution: {
+      ct: buildEvolution(ctJournal.ventes),
+      pea: buildEvolution(peaJournal.ventes),
+      crypto: buildEvolution(cryptoJournal.ventes)
+    },
+    journal: {
+      cto: ctJournal.positions,
+      pea: peaJournal.positions,
+      crypto: cryptoJournal.positions
+    },
+    comptes,
+    comptesError,
+    cryptoStats: cryptoJournal.stats,
+    fraisCt: ctJournal.stats.frais,
+    fraisPea: peaJournal.stats.frais,
+    cryptoGain: cryptoJournal.ventes.reduce((s, v) => s + v.gain, 0),
+    cryptoNbVentes: cryptoJournal.ventes.length,
+    cryptoError,
+    cryptoQuotes,
+    cryptoHistory,
+    cryptoLiveError,
+    direct,
+    directError,
+    historique,
+    historiqueError
+  };
+}
+
+/* ---------- Crypto : CoinGecko ---------- */
+function cgId(nom) {
+  return COINGECKO_IDS[normKey(nom)] || null;
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
+  return res.json();
+}
+
+// { bitcoin: { eur: 95000, change24: -0.012 }, ... }  (change24 en fraction)
+async function fetchCryptoQuotes(ids) {
+  const j = await fetchJson(`${COINGECKO_API}/simple/price?ids=${ids.join(',')}` +
+    '&vs_currencies=eur&include_24hr_change=true&include_last_updated_at=true');
+  const out = {};
+  ids.forEach(id => {
+    if (j[id] && typeof j[id].eur === 'number') {
+      out[id] = {
+        eur: j[id].eur,
+        change24: typeof j[id].eur_24h_change === 'number' ? j[id].eur_24h_change / 100 : null,
+        updated: j[id].last_updated_at ? new Date(j[id].last_updated_at * 1000) : null
+      };
+    }
+  });
+  return out;
+}
+
+// { bitcoin: Map(date ISO -> cours EUR), ... } — un point par jour
+async function fetchCryptoHistory(ids, days) {
+  const out = {};
+  await Promise.all(ids.map(async id => {
+    const j = await fetchJson(`${COINGECKO_API}/coins/${id}/market_chart?vs_currency=eur&days=${days}&interval=daily`);
+    const m = new Map();
+    (j.prices || []).forEach(([ts, px]) => m.set(new Date(ts).toISOString().slice(0, 10), px));
+    out[id] = m;
+  }));
+  return out;
+}
+
+/* Cours crypto : CoinGecko en priorité, sinon la ligne crypto|NOM de "Suivi direct".
+   Renvoie le même format que les entrées de DATA.direct. */
+function cryptoQuote(nom) {
+  const id = cgId(nom);
+  const q = id && DATA.cryptoQuotes[id];
+  if (q) {
+    const SYMBOLES = { bitcoin: 'BTC', solana: 'SOL', ethereum: 'ETH' };
+    return { ticker: SYMBOLES[id] || id,
+             cours: q.eur, natif: q.eur, devise: 'EUR', pctOuv: q.change24, pctAchat: null,
+             type: 'crypto', source: 'CoinGecko' };
+  }
+  const d = DATA.direct[normKey('crypto|' + nom)];
+  return d ? { ...d, source: 'Google Sheets' } : undefined;
+}
+
+// Cours d'un titre quel que soit le compte
+function quoteFor(acc, nom) {
+  return acc === 'crypto' ? cryptoQuote(nom) : DATA.direct[normKey(acc + '|' + nom)];
+}
+
+/* Latent crypto jour par jour, reconstruit à partir de l'historique CoinGecko :
+   pour chaque date, chaque lot restant compte à partir de sa date d'achat
+   (valeur = qté × cours du jour − montant investi, frais inclus). */
+function buildCryptoLatentSeries() {
+  const lots = (DATA.journal.crypto || []).filter(p => p.date && cgId(p.nom));
+  if (!lots.length) return [];
+  const dates = new Set();
+  Object.values(DATA.cryptoHistory || {}).forEach(m => m.forEach((_, d) => dates.add(d)));
+  const debut = lots.map(l => l.date).sort()[0];
+  const out = [];
+  [...dates].filter(d => d >= debut).sort().forEach(d => {
+    let latent = 0, ok = false;
+    lots.forEach(l => {
+      if (l.date > d) return;
+      const px = DATA.cryptoHistory[cgId(l.nom)] && DATA.cryptoHistory[cgId(l.nom)].get(d);
+      if (px === undefined) return;
+      latent += px * l.qte - l.montant;
+      ok = true;
+    });
+    if (ok) out.push({ date: d, crypto: latent });
+  });
+  return out;
+}
+
+/* ==================== VALEURS PAR COMPTE ====================
+   Valeur de marché d'un compte boursier (cto, pea, crypto) : cours en direct × qté.
+   Une ligne sans cours est comptée à son prix de revient (et le total est marqué
+   "incomplet"), pour ne jamais faire disparaître une position du patrimoine. */
+function valeurCompte(acc) {
+  let valeur = 0, investi = 0, complet = true;
+  aggregateByName((DATA.journal && DATA.journal[acc]) || []).forEach(p => {
+    const d = quoteFor(acc, p.nom);
+    if (d && d.cours !== null && d.cours !== undefined) valeur += d.cours * p.qte;
+    else { valeur += p.montant; complet = false; }
+    investi += p.montant;
+  });
+  return { valeur, investi, complet };
+}
+
+function fillHeroAndCards() {
+  const t = DATA.tableau;
+  const vCto = valeurCompte('cto').valeur;
+  const vPea = valeurCompte('pea').valeur;
+  const vCrypto = valeurCompte('crypto').valeur;
+
+  // Crypto : calculé depuis la feuille Crypto (impôt appliqué seulement sur un gain)
+  const cs = DATA.cryptoStats;
+  const crGain = DATA.cryptoGain;
+  const crGainNet = crGain > 0 ? crGain * (1 - TAUX_IMPOT_CRYPTO) : crGain;
+  const gainTotal = t.gainCumule + crGainNet;
+
+  document.getElementById('totalGain').textContent = (gainTotal >= 0 ? '+' : '') + fmt(gainTotal);
+  document.getElementById('totalGain').className = 'value ' + (gainTotal >= 0 ? 'pos' : 'neg');
+  document.getElementById('totalGainNet').textContent = fmt(gainTotal);
+
+  const crOk = !DATA.cryptoError;
+  document.getElementById('cr-lignes').textContent = crOk ? cs.lignes : '—';
+  document.getElementById('cr-capital').textContent = crOk ? fmt(cs.capital) : '—';
+  document.getElementById('cr-frais').textContent = crOk ? fmt(cs.frais) : '—';
+  document.getElementById('cr-ventes').textContent = crOk ? DATA.cryptoNbVentes : '—';
+  document.getElementById('cr-gain').textContent = crOk ? (crGain >= 0 ? '+' : '') + fmt(crGain) : '—';
+  document.getElementById('cr-gain-net').textContent = crOk ? (crGainNet >= 0 ? '+' : '') + fmt(crGainNet) : '—';
+  document.getElementById('cr-restant').textContent = crOk ? fmt(vCrypto) : '—';
+
+  document.getElementById('ct-lignes').textContent = t.ct.lignes;
+  document.getElementById('ct-capital').textContent = fmt(t.ct.capital);
+  document.getElementById('ct-frais').textContent = fmt(DATA.fraisCt || 0);
+  document.getElementById('ct-ventes').textContent = t.ct.ventes;
+  document.getElementById('ct-gain').textContent = (t.ct.gain >= 0 ? '+' : '') + fmt(t.ct.gain);
+  document.getElementById('ct-gain-net').textContent = (t.ct.gainNet >= 0 ? '+' : '') + fmt(t.ct.gainNet);
+
+  document.getElementById('pea-lignes').textContent = t.pea.lignes;
+  document.getElementById('pea-capital').textContent = fmt(t.pea.capital);
+  document.getElementById('pea-frais').textContent = fmt(DATA.fraisPea || 0);
+  document.getElementById('pea-ventes').textContent = t.pea.ventes;
+  document.getElementById('pea-gain').textContent = (t.pea.gain >= 0 ? '+' : '') + fmt(t.pea.gain);
+  document.getElementById('pea-gain-net').textContent = (t.pea.gainNet >= 0 ? '+' : '') + fmt(t.pea.gainNet);
+
+  document.getElementById('ct-restant').textContent = fmt(vCto);
+  document.getElementById('pea-restant').textContent = fmt(vPea);
+  document.getElementById('total-restant').textContent = fmt(vCto + vPea + (crOk ? vCrypto : 0));
+}
+
+if (typeof ChartDataLabels !== 'undefined') Chart.register(ChartDataLabels);
+
+const PALETTE = ["#C7A34C","#60A5FA","#A78BFA","#4ADE80","#FB7185","#F59E0B","#22D3EE","#F472B6","#94A3B8","#34D399","#818CF8"];
+const fmt = n => n.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+const fmtQte = n => n.toLocaleString('fr-FR', { maximumFractionDigits: 8 });
+const fmtPct = p => (p >= 0 ? '+' : '') + (p * 100).toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' %';
+const fmtDate = iso => new Date(iso).toLocaleDateString('fr-FR');
+
+let chartSecteur, chartGeo, chartEvolution, chartLatent, chartClasses, chartPatrimoine;
+let currentAccount = 'global';
+let currentDirectAccount = 'cto';
+
+// IMPORTANT : l'anneau et la légende doivent utiliser exactement le même
+// tableau trié, sinon les couleurs (attribuées par position) se décalent.
+function sortedItems(items) {
+  return items.filter(i => i.montant > 0).sort((a, b) => b.montant - a.montant);
+}
+
+// colorFn(cat, idx) optionnel : couleur fixe par catégorie (classes d'actif)
+const paletteColor = (cat, idx) => PALETTE[idx % PALETTE.length];
+
+function buildDonut(canvasId, items, existingChart, colorFn = paletteColor) {
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const filtered = sortedItems(items);
+  if (existingChart) existingChart.destroy();
+  return new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: filtered.map(i => i.cat),
+      datasets: [{
+        data: filtered.map(i => i.montant),
+        backgroundColor: filtered.map((it, i) => colorFn(it.cat, i)),
+        borderColor: '#131C2E',
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '68%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `${c.label}: ${fmt(c.raw)}` } },
+        datalabels: {
+          color: '#0B1220',
+          font: { weight: '700', size: 11 },
+          formatter: (value, ctx) => {
+            const total = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
+            const pct = total ? (value / total * 100) : 0;
+            return pct >= 4 ? pct.toFixed(0) + '%' : '';
+          }
+        }
+      }
+    }
+  });
+}
+
+function buildLegend(elId, items, colorFn = paletteColor) {
+  const el = document.getElementById(elId);
+  const filtered = sortedItems(items);
+  el.innerHTML = filtered.map((i, idx) => `
+    <div class="legend-item">
+      <div class="legend-left"><span class="legend-dot" style="background:${colorFn(i.cat, idx)}"></span>${i.cat}</div>
+      <div class="legend-right"><span class="amt">${fmt(i.montant)}</span><span class="pct">${(i.pct*100).toFixed(1)}%</span></div>
+    </div>`).join('');
+}
+
+/* Répartition secteur / géo en valeur de marché, recalculée depuis les journaux.
+   "Global" additionne CTO et PEA (les catégories sont les mêmes dans les deux). */
+function buildRepartition(accounts) {
+  const sec = new Map(), geo = new Map();
+  let total = 0, sansCours = 0;
+  accounts.forEach(acc => {
+    aggregateByName(DATA.journal[acc] || []).forEach(p => {
+      const d = quoteFor(acc, p.nom);
+      const v = (d && d.cours !== null && d.cours !== undefined) ? d.cours * p.qte : (sansCours++, p.montant);
+      total += v;
+      const s = p.secteur || 'Autre', g = p.geo || 'Autre';
+      sec.set(s, (sec.get(s) || 0) + v);
+      geo.set(g, (geo.get(g) || 0) + v);
+    });
+  });
+  const toItems = m => [...m].map(([cat, montant]) => ({ cat, montant, pct: total ? montant / total : 0 }));
+  return { secteur: toItems(sec), geo: toItems(geo), total, sansCours };
+}
+
+function renderRepartition() {
+  const accs = currentAccount === 'global' ? ['cto', 'pea'] : [currentAccount];
+  const d = buildRepartition(accs);
+  chartSecteur = buildDonut('chartSecteur', d.secteur, chartSecteur);
+  buildLegend('legendSecteur', d.secteur);
+  chartGeo = buildDonut('chartGeo', d.geo, chartGeo);
+  buildLegend('legendGeo', d.geo);
+  document.getElementById('repNote').textContent =
+    `Valeur de marché : ${fmt(d.total)}` +
+    (d.sansCours ? ` · ${d.sansCours} ligne(s) sans cours comptée(s) au prix d'achat` : '') +
+    (currentAccount === 'global' ? ' · CTO + PEA' : '');
+}
+
+/* ==================== PATRIMOINE ==================== */
+
+const sansAccent = s => normKey(s).normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Couleur fixe par classe d'actif (même couleur dans l'anneau, la liste et la courbe)
+const CLASS_COLORS = {
+  'liquidites': '#22D3EE', 'epargne reglementee': '#4ADE80', 'compte a terme': '#34D399',
+  'assurance vie': '#F472B6', 'actions': '#A78BFA', 'crypto': '#F59E0B',
+  'immobilier': '#94A3B8', 'per': '#818CF8', 'autre': '#8B98AC'
+};
+const classColor = (cat, idx) => CLASS_COLORS[sansAccent(cat)] || PALETTE[(idx + 3) % PALETTE.length];
+
+/* Feuille "Comptes" : une ligne par compte, puis une colonne par fin de mois
+   (en-tête = date) contenant le solde. Colonnes repérées par leur en-tête. */
+function parseComptes(rows) {
+  // Ligne d'en-tête = celle qui contient à la fois "Compte" et une colonne "Classe"
+  const headerIdx = rows.findIndex(r => r[0] && sansAccent(r[0]) === 'compte' &&
+    r.some(c => c && sansAccent(c).startsWith('classe')));
+  if (headerIdx === -1) return [];
+  const raw = rows[headerIdx].map(c => (c == null ? '' : String(c).trim()));
+  const header = raw.map(sansAccent);
+  const col = n => header.findIndex(h => h.startsWith(n));
+  const cEtab = col('etablissement'), cType = col('type'), cClasse = col('classe'),
+        cDispo = col('disponib'), cSource = col('source'), cTaux = col('taux'), cNote = col('note'),
+        cOuv = header.findIndex(h => h.startsWith('date') && h.includes('ouverture'));
+
+  const dateCols = [];
+  raw.forEach((h, i) => { if (i > 0 && extractDateParts(h)) dateCols.push(i); });
+  const fmtD = detectDateFormat(dateCols.map(i => raw[i]));
+  // Une date seule comme 05/09/2023 est ambiguë : on déduit le format de toutes les dates
+  // de la feuille, dont les en-têtes de fin de mois (30/09/2026…) qui ne le sont jamais.
+  const fmtOuv = cOuv !== -1
+    ? detectDateFormat([...dateCols.map(i => raw[i]),
+        ...rows.slice(headerIdx + 1).map(r => r && r[cOuv]).filter(Boolean)]) : fmtD;
+
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const nom = r && r[0] ? String(r[0]).trim() : '';
+    if (!nom) continue;
+    if (/^total/i.test(nom)) break;
+    const get = c => (c !== -1 && r[c] ? String(r[c]).trim() : '');
+    const soldes = [];
+    dateCols.forEach(c => {
+      const v = parseNumOrNull(r[c]);
+      if (v !== null) soldes.push({ date: parseDateWithFormat(raw[c], fmtD), montant: v });
+    });
+    soldes.sort((a, b) => a.date.localeCompare(b.date));
+    out.push({
+      nom, etab: get(cEtab), type: get(cType), classe: get(cClasse) || 'Autre',
+      dispo: get(cDispo), auto: sansAccent(get(cSource)) === 'auto',
+      taux: cTaux !== -1 ? parseNumOrNull(r[cTaux]) : null, note: get(cNote), soldes,
+      ouverture: cOuv !== -1 && r[cOuv] ? parseDateWithFormat(r[cOuv], fmtOuv) : null
+    });
+  }
+  return out;
+}
+
+// Compte "auto" → journal correspondant
+function autoKey(c) {
+  const t = sansAccent(c.type + ' ' + c.nom);
+  if (/\bpea\b/.test(t)) return 'pea';
+  if (/\bcto\b|compte-titres|compte titres/.test(t)) return 'cto';
+  if (/crypto/.test(t)) return 'crypto';
+  return null;
+}
+
+const isDette = c => sansAccent(c.classe) === 'dette' || sansAccent(c.type) === 'dette';
+
+// Liste des comptes avec leur valeur actuelle. Sans feuille Comptes, on affiche
+// au moins les trois comptes boursiers calculés automatiquement.
+function comptesActuels() {
+  let base = DATA.comptes && DATA.comptes.length ? DATA.comptes : [
+    { nom: 'PEA', etab: 'BoursoBank', type: 'PEA', classe: 'Actions', dispo: 'Sous conditions', auto: true, soldes: [] },
+    { nom: 'Compte-Titres', etab: 'BoursoBank', type: 'CTO', classe: 'Actions', dispo: 'Immediate', auto: true, soldes: [] },
+    { nom: 'Crypto', etab: 'Coinhouse', type: 'Crypto', classe: 'Crypto', dispo: 'Immediate', auto: true, soldes: [] }
+  ];
+  return base.map(c => {
+    if (c.auto) {
+      const k = autoKey(c);
+      const v = k ? valeurCompte(k) : { valeur: 0, complet: false };
+      return { ...c, key: k, valeur: v.valeur, complet: v.complet, date: null };
+    }
+    const last = c.soldes[c.soldes.length - 1];
+    let v = last ? last.montant : 0;
+    if (isDette(c)) v = -Math.abs(v);
+    return { ...c, valeur: v, date: last ? last.date : null, complet: !!last };
+  });
+}
+
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+// Valeur d'un compte à une date passée (pour la courbe mensuelle)
+function valeurALaDate(c, d) {
+  if (!c.auto) {
+    const s = c.soldes.filter(x => x.date <= d);
+    if (!s.length) return 0;
+    const v = s[s.length - 1].montant;
+    return isDette(c) ? -Math.abs(v) : v;
+  }
+  if (d >= todayISO()) return c.valeur;                  // mois en cours : valeur en direct
+  const k = c.key;
+  if (k === 'cto' || k === 'pea') {
+    const h = (DATA.historique || []).filter(x => x.date <= d);
+    if (!h.length) return 0;
+    const v = h[h.length - 1][k === 'cto' ? 'vct' : 'vpea'];
+    return v === null || v === undefined ? 0 : v;
+  }
+  if (k === 'crypto') {
+    let v = 0;
+    (DATA.journal.crypto || []).filter(l => l.date && l.date <= d).forEach(l => {
+      const m = DATA.cryptoHistory && DATA.cryptoHistory[cgId(l.nom)];
+      let px;
+      if (m) { const ds = [...m.keys()].filter(x => x <= d).sort(); if (ds.length) px = m.get(ds[ds.length - 1]); }
+      v += px !== undefined ? px * l.qte : l.montant;
+    });
+    return v;
+  }
+  return 0;
+}
+
+function moisLabel(iso) {
+  return new Date(iso).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+}
+
+function renderPatrimoine() {
+  const warn = document.getElementById('patWarn');
+  if (DATA.comptesError === 'lien-non-configuré') {
+    warn.innerHTML = `<div class="warn-box"><b>Feuille "Comptes" pas encore reliée.</b><br>
+      Seuls PEA, CTO et Crypto sont affichés. Renseigne <code>GID.comptes</code> en haut du code
+      (le nombre après <code>#gid=</code> quand tu ouvres l'onglet "Comptes").</div>`;
+  } else if (DATA.comptesError) {
+    warn.innerHTML = `<div class="warn-box">Impossible de lire la feuille "Comptes" — ${DATA.comptesError}.</div>`;
+  } else warn.innerHTML = '';
+
+  const comptes = comptesActuels();
+  const total = comptes.reduce((s, c) => s + c.valeur, 0);
+  const actif = comptes.filter(c => c.valeur > 0).reduce((s, c) => s + c.valeur, 0);
+  const sumBy = pred => comptes.filter(pred).reduce((s, c) => s + c.valeur, 0);
+  const cls = c => sansAccent(c.classe);
+
+  const epargne = sumBy(c => ['liquidites', 'epargne reglementee', 'compte a terme'].includes(cls(c)));
+  const av = sumBy(c => cls(c) === 'assurance vie');
+  const bourse = sumBy(c => cls(c) === 'actions');
+  const crypto = sumBy(c => cls(c) === 'crypto');
+  const pct = v => actif ? (v / actif * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : '—';
+
+  document.getElementById('pat-total').textContent = fmt(total);
+  document.getElementById('pat-epargne').textContent = fmt(epargne);
+  document.getElementById('pat-av').textContent = fmt(av);
+  document.getElementById('pat-epargne-pct').textContent = pct(epargne + av);
+  document.getElementById('pat-bourse').textContent = fmt(bourse);
+  document.getElementById('pat-crypto').textContent = fmt(crypto);
+  document.getElementById('pat-marches-pct').textContent = pct(bourse + crypto);
+  const dispo = d => sumBy(c => c.valeur > 0 && sansAccent(c.dispo).startsWith(d));
+  document.getElementById('pat-dispo').textContent = fmt(dispo('immediat'));
+  document.getElementById('pat-cond').textContent = fmt(dispo('sous'));
+  document.getElementById('pat-bloque').textContent = fmt(dispo('bloque'));
+
+  // Anneau par classe d'actif
+  const byClass = new Map();
+  comptes.filter(c => c.valeur > 0).forEach(c => byClass.set(c.classe, (byClass.get(c.classe) || 0) + c.valeur));
+  const items = [...byClass].map(([cat, montant]) => ({ cat, montant, pct: actif ? montant / actif : 0 }));
+  chartClasses = buildDonut('chartClasses', items, chartClasses, classColor);
+  buildLegend('legendClasses', items, classColor);
+
+  // Dernier relevé mensuel = date la plus récente où au moins un solde a été saisi.
+  // (Une case vide = solde inchangé : on ne réclame pas une mise à jour compte par compte.)
+  const auj = new Date();
+  const datesReleve = comptes.filter(c => !c.auto).flatMap(c => (c.soldes || []).map(x => x.date)).sort();
+  const dernierReleve = datesReleve.length ? datesReleve[datesReleve.length - 1] : null;
+  if (dernierReleve && !DATA.comptesError) {
+    const jours = Math.round((auj - new Date(dernierReleve)) / 86400000);
+    if (jours > 45) {
+      warn.innerHTML = `<div class="warn-box">Dernier relevé mensuel le ${fmtDate(dernierReleve)} (${jours} jours) :
+        pense à saisir les soldes qui ont changé dans la feuille "Comptes".</div>`;
+    }
+  }
+
+  // Liste des comptes
+  document.getElementById('patComptes').innerHTML = [...comptes].sort((a, b) => b.valeur - a.valeur).map(c => {
+    let meta, badge = '';
+    if (c.auto) {
+      meta = 'en direct' + (c.complet ? '' : ' · certaines lignes au prix d’achat');
+    } else if (!c.date) {
+      meta = 'aucun solde saisi'; badge = '<span class="pct-badge flat">à saisir</span>';
+    } else {
+      meta = (c.date === dernierReleve ? 'solde au ' : 'inchangé depuis le ') + fmtDate(c.date);
+    }
+    const extra = [c.etab, c.type !== c.nom ? c.type : '', c.taux ? (c.taux * 100).toLocaleString('fr-FR') + ' %' : '']
+      .filter(Boolean).join(' · ');
+    const ouv = ouvertureTexte(c);
+    return `<div class="position-item">
+      <div>
+        <div class="position-name"><span class="legend-dot" style="display:inline-block;margin-right:6px;background:${classColor(c.classe, 0)}"></span>${c.nom}</div>
+        <div class="position-meta">${extra}</div>
+        ${ouv ? `<div class="position-meta">${ouv}</div>` : ''}
+        <div class="position-meta">${meta}</div>
+      </div>
+      <div class="direct-right">
+        <div class="position-amt" style="${c.valeur < 0 ? 'color:var(--red)' : ''}">${fmt(c.valeur)}</div>
+        <div class="pct-line">${c.valeur > 0 ? pct(c.valeur) : ''} ${badge}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  renderPatrimoineHistorique(comptes, total);
+}
+
+/* Date d'ouverture : ancienneté du compte, et pour le PEA le passage des 5 ans
+   (après 5 ans, retraits possibles sans clôture et gains exonérés d'impôt sur le revenu). */
+function ouvertureTexte(c) {
+  if (!c.ouverture) return '';
+  const ouv = new Date(c.ouverture), auj = new Date();
+  let mois = (auj.getFullYear() - ouv.getFullYear()) * 12 + (auj.getMonth() - ouv.getMonth());
+  if (auj.getDate() < ouv.getDate()) mois--;
+  const age = mois < 12 ? `${Math.max(mois, 0)} mois` : `${Math.floor(mois / 12)} an${mois >= 24 ? 's' : ''}` +
+    (mois % 12 ? ` ${mois % 12} mois` : '');
+  let txt = `ouvert le ${fmtDate(c.ouverture)} · ${age}`;
+  // Seuils fiscaux : 5 ans pour le PEA, 8 ans pour l'assurance vie
+  const seuil = autoKey(c) === 'pea' ? 5 : (sansAccent(c.classe) === 'assurance vie' ? 8 : 0);
+  if (seuil) {
+    const d = new Date(ouv); d.setFullYear(ouv.getFullYear() + seuil);
+    txt += d <= auj ? ` · <b style="color:var(--green)">${seuil} ans atteints</b>`
+                    : ` · ${seuil} ans le ${d.toLocaleDateString('fr-FR')}`;
+  }
+  return txt;
+}
+
+/* Courbe mensuelle : une barre empilée par classe d'actif pour chaque date de
+   la feuille Comptes ayant au moins un solde saisi. PEA/CTO viennent de la feuille
+   "Historique Latent" (colonnes Valeur), la crypto de l'historique CoinGecko ;
+   le mois en cours utilise les valeurs en direct. */
+function renderPatrimoineHistorique(comptes, totalActuel) {
+  const note = document.getElementById('patHistNote');
+  const varEl = document.getElementById('pat-var');
+  const dates = [...new Set(comptes.filter(c => !c.auto).flatMap(c => c.soldes.map(s => s.date)))].sort();
+
+  const classes = [...new Set(comptes.map(c => c.classe))];
+  const points = dates.map(d => {
+    const parClasse = {};
+    classes.forEach(k => parClasse[k] = 0);
+    comptes.forEach(c => parClasse[c.classe] += valeurALaDate(c, d));
+    const tot = Object.values(parClasse).reduce((a, b) => a + b, 0);
+    return { date: d, parClasse, total: tot, enCours: d >= todayISO() };
+  });
+
+  // Variation par rapport au dernier mois clos
+  const passes = points.filter(p => !p.enCours);
+  if (passes.length) {
+    const ref = passes[passes.length - 1];
+    const diff = totalActuel - ref.total;
+    varEl.innerHTML = `Depuis le ${fmtDate(ref.date)} : <b class="${diff >= 0 ? 'pos' : 'neg'}">${diff >= 0 ? '+' : ''}${fmt(diff)}</b> ` +
+      (ref.total ? pctBadge(diff / ref.total) : '');
+  } else {
+    varEl.textContent = 'Premier relevé mensuel en cours';
+  }
+
+  note.textContent = !dates.length
+    ? 'Saisis les soldes de tes comptes dans la feuille "Comptes" pour démarrer la courbe.'
+    : `${points.length} mois · PEA/CTO en valeur de marché, mois en cours (*) en direct.`;
+
+  const ctx = document.getElementById('chartPatrimoine').getContext('2d');
+  if (chartPatrimoine) chartPatrimoine.destroy();
+  chartPatrimoine = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: points.map(p => moisLabel(p.date) + (p.enCours ? ' *' : '')),
+      datasets: classes.map((k, i) => ({
+        label: k,
+        data: points.map(p => Math.round(p.parClasse[k] * 100) / 100),
+        backgroundColor: classColor(k, i),
+        borderRadius: 3, maxBarThickness: 46
+      }))
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#8B98AC', font: { size: 10 } } },
+        y: { stacked: true, grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: { size: 10 },
+             callback: v => v.toLocaleString('fr-FR') + '€' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#E8EDF4', font: { size: 11 }, boxWidth: 12 } },
+        datalabels: { display: false },
+        tooltip: { callbacks: {
+          label: c => `${c.dataset.label} : ${fmt(c.raw)}`,
+          footer: items => 'Total : ' + fmt(points[items[0].dataIndex].total)
+        } }
+      }
+    }
+  });
+}
+
+function renderEvolution() {
+  const ctData = DATA.evolution.ct;
+  const peaData = DATA.evolution.pea;
+  const crData = DATA.evolution.crypto || [];
+  const allDates = [...new Set([...ctData.map(d=>d.date), ...peaData.map(d=>d.date), ...crData.map(d=>d.date)])].sort();
+
+  function alignToLabels(series) {
+    const map = new Map(series.map(d => [d.date, d.cumule]));
+    let last = null;
+    return allDates.map(dt => {
+      if (map.has(dt)) { last = map.get(dt); return last; }
+      return last;
+    });
+  }
+
+  const ctx = document.getElementById('chartEvolution').getContext('2d');
+  if (chartEvolution) chartEvolution.destroy();
+  chartEvolution = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: allDates.map(d => new Date(d).toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'2-digit'})),
+      datasets: [
+        {
+          label: 'Compte-Titres',
+          data: alignToLabels(ctData),
+          borderColor: '#60A5FA', backgroundColor: 'rgba(96,165,250,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true, spanGaps: true
+        },
+        {
+          label: 'PEA',
+          data: alignToLabels(peaData),
+          borderColor: '#A78BFA', backgroundColor: 'rgba(167,139,250,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true, spanGaps: true
+        },
+        // Série crypto affichée seulement quand il y a eu au moins une vente
+        ...(crData.length ? [{
+          label: 'Crypto',
+          data: alignToLabels(crData),
+          borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true, spanGaps: true
+        }] : [])
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: {size: 9}, maxRotation: 45, minRotation: 45 } },
+        y: { grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: {size: 10}, callback: v => v + '€' } }
+      },
+      plugins: { legend: { labels: { color: '#E8EDF4', font: {size: 11} } }, datalabels: { display: false } }
+    }
+  });
+
+  const merged = [...ctData.map(d=>({...d, compte:'CT'})), ...peaData.map(d=>({...d, compte:'PEA'})),
+                  ...crData.map(d=>({...d, compte:'Crypto'}))]
+    .filter(d => d.action !== 'Ouverture')
+    .sort((a,b) => new Date(b.date) - new Date(a.date));
+  document.getElementById('salesHistory').innerHTML = merged.map(d => `
+    <div class="position-item">
+      <div>
+        <div class="position-name">${d.action}</div>
+        <div class="position-meta">${d.compte} · ${new Date(d.date).toLocaleDateString('fr-FR')}</div>
+      </div>
+      <div class="position-amt ${d.gain >= 0 ? '' : ''}" style="color:${d.gain >= 0 ? '#4ADE80' : '#FB7185'}">${d.gain >= 0 ? '+' : ''}${fmt(d.gain)}</div>
+    </div>`).join('');
+}
+
+/* ==================== ONGLET DIRECT ==================== */
+
+// Un même titre peut apparaître sur plusieurs lignes d'achat (plusieurs lots).
+// La feuille "Suivi direct" n'a qu'une ligne par titre : on regroupe donc les lots
+// par nom, en cumulant quantité et montant investi restant.
+function aggregateByName(positions) {
+  const map = new Map();
+  positions.forEach(p => {
+    const cur = map.get(p.nom) || { nom: p.nom, secteur: p.secteur, geo: p.geo, qte: 0, montant: 0 };
+    cur.qte += p.qte;
+    cur.montant += p.montant;
+    map.set(p.nom, cur);
+  });
+  return [...map.values()];
+}
+
+/* Classement Actions / ETF.
+   Priorité à une colonne "Type" de la feuille "Suivi direct" si elle existe
+   (saisir "ETF" ou "Action") ; sinon, détection sur le libellé. Les libellés de
+   tes ETF portent tous un marqueur reconnaissable (ETF, UCITS, ISHS, AMUN.PEA,
+   AM.PEA, LYX, MSCI, TRACKER), là où tes actions sont de simples noms de sociétés. */
+function isETF(nom, secteur, typeFeuille) {
+  if (typeFeuille) {
+    const t = normKey(typeFeuille);
+    if (t.startsWith('etf') || t.startsWith('tracker')) return true;
+    if (t.startsWith('action')) return false;
+  }
+  const s = normKey(nom + ' ' + (secteur || ''));
+  return /\betf\b|ucits|uc\.etf|uc\.acc|\bisds\b|^ishs|\bishs\b|^amun|^am\.pea|^lyx|\btracker\b|\bmsci\b|nasdaq-100/.test(s);
+}
+
+function pctBadge(p) {
+  if (p === null || p === undefined) return '<span class="pct-badge flat">n/d</span>';
+  const cls = p > 0 ? 'up' : (p < 0 ? 'down' : 'flat');
+  return `<span class="pct-badge ${cls}">${fmtPct(p)}</span>`;
+}
+
+/* ---- Historique des latentes ----
+   Alimenté par la feuille "Historique Latent" du Google Sheet, écrite chaque soir
+   par un déclencheur Apps Script. L'historique est donc identique sur tous les
+   appareils et continue de se remplir même quand cette page n'est pas ouverte. */
+
+function parseHistoriqueLatent(rows) {
+  if (!rows || rows.length < 2) return [];
+
+  const headerIdx = rows.findIndex(r =>
+    r.some(c => c && String(c).trim().toLowerCase() === 'date')
+  );
+  if (headerIdx === -1) return [];
+
+  const header = rows[headerIdx].map(c => (c ? String(c).trim().toLowerCase() : ''));
+  const colDate = header.findIndex(h => h === 'date');
+  const colCt = header.findIndex(h => h.includes('latent') && h.includes('ct'));
+  const colPea = header.findIndex(h => h.includes('latent') && h.includes('pea'));
+  const colVCt = header.findIndex(h => h.includes('valeur') && h.includes('ct'));
+  const colVPea = header.findIndex(h => h.includes('valeur') && h.includes('pea'));
+  if (colDate === -1 || colCt === -1 || colPea === -1) return [];
+
+  // Le format de date dépend de la locale du classeur à l'export : on le déduit
+  // de la colonne entière plutôt que de le supposer.
+  const rawDates = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    if (rows[i] && rows[i][colDate]) rawDates.push(rows[i][colDate]);
+  }
+  const fmtDate = detectDateFormat(rawDates);
+
+  const out = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[colDate]) continue;
+    const date = parseDateWithFormat(r[colDate], fmtDate);
+    if (!date) continue;
+    out.push({ date, ct: parseNum(r[colCt]), pea: parseNum(r[colPea]),
+               vct: colVCt !== -1 ? parseNumOrNull(r[colVCt]) : null,
+               vpea: colVPea !== -1 ? parseNumOrNull(r[colVPea]) : null });
+  }
+  out.sort((a, b) => a.date.localeCompare(b.date));
+  return out;
+}
+
+function renderLatentChart() {
+  const hist = (DATA && DATA.historique) || [];
+  const noteEl = document.getElementById('latentNote');
+
+  if (DATA && DATA.historiqueError) {
+    noteEl.textContent = 'Historique indisponible — ' + DATA.historiqueError +
+      ' · vérifie que la feuille "Historique Latent" est publiée en CSV.';
+  } else if (hist.length === 0) {
+    noteEl.textContent = "Aucune clôture enregistrée pour l'instant.";
+  } else if (hist.length === 1) {
+    noteEl.textContent = "1 clôture enregistrée — la courbe apparaîtra dès la deuxième.";
+  } else {
+    noteEl.textContent = `${hist.length} clôtures depuis le ` +
+      new Date(hist[0].date).toLocaleDateString('fr-FR') + '.';
+  }
+
+  // Série crypto : reconstruite depuis CoinGecko (la crypto cote aussi le week-end,
+  // donc ses dates ne coïncident pas avec celles de la feuille). On fusionne les
+  // deux axes de dates ; spanGaps relie les points CT/PEA par-dessus les week-ends.
+  const cryptoSerie = buildCryptoLatentSeries();
+  const byDate = new Map();
+  hist.forEach(h => byDate.set(h.date, { ct: h.ct, pea: h.pea, crypto: null }));
+  cryptoSerie.forEach(c => {
+    const cur = byDate.get(c.date) || { ct: null, pea: null, crypto: null };
+    cur.crypto = c.crypto;
+    byDate.set(c.date, cur);
+  });
+  // Sur le segment Crypto, on n'affiche que la courbe crypto, sur sa propre période :
+  // ses montants (quelques euros) seraient illisibles à l'échelle du CT/PEA.
+  const onlyCrypto = currentDirectAccount === 'crypto' && cryptoSerie.length > 0;
+  const dates = onlyCrypto ? cryptoSerie.map(c => c.date) : [...byDate.keys()].sort();
+  const pts = dates.map(d => byDate.get(d));
+  document.getElementById('latentTitle').textContent = onlyCrypto
+    ? 'Plus/moins-value latente crypto dans le temps'
+    : 'Plus/moins-values latentes dans le temps';
+
+  if (cryptoSerie.length) {
+    noteEl.textContent += ` Crypto : ${cryptoSerie.length} jours (CoinGecko).`;
+  } else if ((DATA.journal.crypto || []).length) {
+    noteEl.textContent += ' Courbe crypto indisponible (CoinGecko ne répond pas).';
+  }
+
+  const ctx = document.getElementById('chartLatent').getContext('2d');
+  if (chartLatent) chartLatent.destroy();
+  chartLatent = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates.map(d =>
+        new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: '2-digit' })),
+      datasets: [
+        {
+          label: 'Compte-Titres', hidden: onlyCrypto,
+          data: pts.map(p => p.ct),
+          borderColor: '#60A5FA', backgroundColor: 'rgba(96,165,250,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true, spanGaps: true
+        },
+        {
+          label: 'PEA', hidden: onlyCrypto,
+          data: pts.map(p => p.pea),
+          borderColor: '#A78BFA', backgroundColor: 'rgba(167,139,250,0.08)',
+          tension: 0.3, pointRadius: 3, fill: true, spanGaps: true
+        },
+        ...(cryptoSerie.length ? [{
+          label: 'Crypto',
+          data: pts.map(p => p.crypto),
+          borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.08)',
+          tension: 0.3, pointRadius: 2, fill: true, spanGaps: true
+        }] : [])
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: { size: 9 }, maxRotation: 45, minRotation: 45 } },
+        y: { grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: { size: 10 }, callback: v => v + '\u20AC' } }
+      },
+      plugins: { legend: { labels: { color: '#E8EDF4', font: { size: 11 } } }, datalabels: { display: false } }
+    }
+  });
+}
+
+function renderDirect() {
+  const warnEl = document.getElementById('directWarn');
+
+  if (DATA.directError === 'lien-non-configuré') {
+    warnEl.innerHTML = `<div class="warn-box">
+      <b>Lien de la feuille "Suivi direct" non renseigné.</b><br>
+      Renseigne <code>GID.direct</code> en haut du code (le nombre après <code>#gid=</code>
+      quand tu ouvres l'onglet "Suivi direct").
+    </div>`;
+  } else if (DATA.directError) {
+    warnEl.innerHTML = `<div class="warn-box">
+      Impossible de lire la feuille "Suivi direct" — ${DATA.directError}.<br>
+      Vérifie qu'elle est bien publiée sur le web au format CSV.
+    </div>`;
+  } else {
+    warnEl.innerHTML = '';
+  }
+
+  const totals = { cto: { valeur: 0, investi: 0 }, pea: { valeur: 0, investi: 0 }, crypto: { valeur: 0, investi: 0 } };
+  let manquants = 0;
+
+  ['cto', 'pea', 'crypto'].forEach(acc => {
+    aggregateByName(DATA.journal[acc] || []).forEach(p => {
+      const d = quoteFor(acc, p.nom);
+      if (d && d.cours !== null) {
+        totals[acc].valeur += d.cours * p.qte;
+        totals[acc].investi += p.montant;
+      } else {
+        manquants++;
+      }
+    });
+  });
+
+  const valeurTotale = totals.cto.valeur + totals.pea.valeur + totals.crypto.valeur;
+  const investiTotal = totals.cto.investi + totals.pea.investi + totals.crypto.investi;
+  const gainTotal = valeurTotale - investiTotal;
+
+  const elValeur = document.getElementById('live-total-valeur');
+  elValeur.textContent = investiTotal > 0 ? fmt(valeurTotale) : '—';
+  elValeur.className = 'value ' + (gainTotal >= 0 ? 'pos' : 'neg');
+
+  const elGain = document.getElementById('live-total-gain');
+  elGain.textContent = investiTotal > 0 ? (gainTotal >= 0 ? '+' : '') + fmt(gainTotal) : '—';
+  elGain.className = gainTotal >= 0 ? 'pos' : 'neg';
+  document.getElementById('live-total-pct').innerHTML =
+    investiTotal > 0 ? pctBadge(gainTotal / investiTotal) : '';
+
+  [['ct', 'cto'], ['pea', 'pea'], ['cr', 'crypto']].forEach(([prefix, acc]) => {
+    const t = totals[acc];
+    const g = t.valeur - t.investi;
+    document.getElementById(`live-${prefix}-valeur`).textContent = t.investi > 0 ? fmt(t.valeur) : '—';
+    document.getElementById(`live-${prefix}-investi`).textContent = t.investi > 0 ? fmt(t.investi) : '—';
+    const gEl = document.getElementById(`live-${prefix}-gain`);
+    gEl.textContent = t.investi > 0 ? (g >= 0 ? '+' : '') + fmt(g) : '—';
+    gEl.className = g >= 0 ? 'pos' : 'neg';
+  });
+
+  renderLatentChart();
+
+  // Rendu d'une ligne de position, réutilisé par les deux colonnes.
+  function ligneHtml(p) {
+    const d = quoteFor(currentDirectAccount, p.nom);
+    const prixAchat = p.qte ? p.montant / p.qte : 0;
+
+    if (!d) {
+      return `<div class="position-item">
+        <div>
+          <div class="position-name">${p.nom}</div>
+          <div class="position-meta">Qté ${fmtQte(p.qte)} · achat moy. ${fmt(prixAchat)}</div>
+          <div class="position-meta">Clé attendue : <code>${currentDirectAccount}|${p.nom}</code></div>
+        </div>
+        <div class="direct-right">
+          <span class="pct-badge flat">absent de la feuille</span>
+        </div>
+      </div>`;
+    }
+
+    if (d.cours === null) {
+      return `<div class="position-item">
+        <div>
+          <div class="position-name">${p.nom}</div>
+          <div class="position-meta">${d.ticker} · Qté ${fmtQte(p.qte)}</div>
+        </div>
+        <div class="direct-right">
+          <span class="pct-badge flat">cours indisponible</span>
+        </div>
+      </div>`;
+    }
+
+    const valeur = d.cours * p.qte;
+    const gain = valeur - p.montant;
+    // % depuis achat : on privilégie la valeur calculée localement, cohérente avec
+    // le prix de revient réel de tous les lots agrégés.
+    const pctAchat = p.montant > 0 ? gain / p.montant : null;
+
+    return `<div class="position-item">
+      <div>
+        <div class="position-name">${p.nom}</div>
+        <div class="position-meta">${d.ticker} · Qté ${fmtQte(p.qte)} · achat moy. ${fmt(prixAchat)}</div>
+        <div class="position-meta">Cours ${fmt(d.cours)}${d.devise && d.devise !== 'EUR' ? ` (${d.natif} ${d.devise})` : ''}${d.source ? ` · ${d.source}` : ''}</div>
+      </div>
+      <div class="direct-right">
+        <div class="position-amt">${fmt(valeur)}</div>
+        <div class="position-amt" style="color:${gain >= 0 ? 'var(--green)' : 'var(--red)'}">${gain >= 0 ? '+' : ''}${fmt(gain)}</div>
+        <div class="pct-line">${currentDirectAccount === 'crypto' ? '24 h' : 'jour'} ${pctBadge(d.pctOuv)}</div>
+        <div class="pct-line">achat ${pctBadge(pctAchat)}</div>
+      </div>
+    </div>`;
+  }
+
+  // Valeur d'un groupe : seules les lignes réellement valorisées sont comptées,
+  // pour que le sous-total ne soit jamais un chiffre partiel présenté comme complet.
+  function totalGroupe(liste) {
+    let v = 0, complet = true;
+    liste.forEach(p => {
+      const d = quoteFor(currentDirectAccount, p.nom);
+      if (d && d.cours !== null) v += d.cours * p.qte; else complet = false;
+    });
+    return { valeur: v, complet };
+  }
+
+  const items = aggregateByName(DATA.journal[currentDirectAccount] || []);
+  const actions = [], etfs = [];
+  const isCrypto = currentDirectAccount === 'crypto';
+  // Crypto : une seule colonne, pas de séparation Actions / ETF
+  document.getElementById('directSplit').classList.toggle('single', isCrypto);
+  document.getElementById('cardEtf').style.display = isCrypto ? 'none' : '';
+  document.getElementById('titleActions').textContent = isCrypto ? 'Cryptos' : 'Actions';
+  items.forEach(p => {
+    if (isCrypto) { actions.push(p); return; }
+    const d = DATA.direct[normKey(currentDirectAccount + '|' + p.nom)];
+    (isETF(p.nom, p.secteur, d && d.type) ? etfs : actions).push(p);
+  });
+
+  [['Actions', actions, 'directListActions', 'totalActions'],
+   ['ETF', etfs, 'directListEtf', 'totalEtf']].forEach(([, liste, listeId, totalId]) => {
+    document.getElementById(listeId).innerHTML =
+      liste.length ? liste.map(ligneHtml).join('') : '<div class="empty-group">Aucune ligne.</div>';
+    const t = totalGroupe(liste);
+    document.getElementById(totalId).textContent =
+      liste.length ? fmt(t.valeur) + (t.complet ? '' : ' (partiel)') : '';
+  });
+
+  if (manquants > 0 && !DATA.directError) {
+    warnEl.innerHTML = `<div class="warn-box">
+      ${manquants} position(s) sans cours : vérifie que leur ticker Google Finance est renseigné
+      dans la feuille "Titres" (les lignes de "Suivi direct" se créent toutes seules).
+    </div>`;
+  }
+
+  // Source des cours crypto + message si la feuille Crypto n'est pas lisible
+  const src = document.getElementById('live-cr-src');
+  const nbCrypto = (DATA.journal.crypto || []).length;
+  src.textContent = !nbCrypto ? '' : Object.keys(DATA.cryptoQuotes).length
+    ? '· CoinGecko, 24h/24' : (DATA.cryptoLiveError ? '· repli Google Sheets' : '');
+  if (isCrypto && DATA.cryptoError) {
+    document.getElementById('directListActions').innerHTML = cryptoErrorHtml();
+  }
+}
+
+function cryptoErrorHtml() {
+  if (DATA.cryptoError === 'lien-non-configuré') {
+    return `<div class="warn-box"><b>Lien de la feuille "Crypto" non renseigné.</b><br>
+      Renseigne <code>GID.crypto</code> en haut du code (le nombre après <code>#gid=</code>
+      quand tu ouvres l'onglet "Crypto").</div>`;
+  }
+  return `<div class="warn-box">Impossible de lire la feuille "Crypto" — ${DATA.cryptoError}.<br>
+    Vérifie qu'elle est bien publiée sur le web au format CSV.</div>`;
+}
+
+// Tab navigation
+document.querySelectorAll('nav.tabbar button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav.tabbar button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+    // Charts drawn while their tab was hidden end up with 0 size; force a resize now that it's visible
+    requestAnimationFrame(() => {
+      [chartSecteur, chartGeo, chartEvolution, chartLatent, chartClasses, chartPatrimoine].forEach(c => { if (c) c.resize(); });
+    });
+  });
+});
+
+// Account segmented controls
+document.getElementById('accountSeg').addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  if (!DATA) return;
+  document.querySelectorAll('#accountSeg button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  currentAccount = e.target.dataset.account;
+  renderRepartition();
+});
+
+document.getElementById('directSeg').addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  if (!DATA) return;
+  document.querySelectorAll('#directSeg button').forEach(b => b.classList.remove('active'));
+  e.target.classList.add('active');
+  currentDirectAccount = e.target.dataset.account;
+  renderDirect();
+});
+
+async function refreshAll() {
+  const btn = document.getElementById('refreshBtn');
+  const timeEl = document.getElementById('updateTime');
+  btn.classList.add('spin');
+  timeEl.textContent = 'Actualisation…';
+  let loaded;
+  try {
+    loaded = await loadAllData();
+  } catch (err) {
+    timeEl.textContent = 'Échec de connexion aux données — ' + err.message;
+    console.error(err);
+    btn.classList.remove('spin');
+    return;
+  }
+  DATA = loaded;
+  try {
+    renderPatrimoine();
+    fillHeroAndCards();
+    renderRepartition();
+    renderEvolution();
+    renderDirect();
+    timeEl.textContent = 'Actualisé à ' + new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) + ' · v13';
+  } catch (err) {
+    timeEl.textContent = 'Données reçues, erreur d\'affichage — ' + err.message;
+    console.error(err);
+  } finally {
+    btn.classList.remove('spin');
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', refreshAll);
+
+refreshAll();
+// Actualisation automatique toutes les 5 minutes si la page reste ouverte
+setInterval(refreshAll, 5 * 60 * 1000);
+
+/* Cours crypto rafraîchis chaque minute (CoinGecko se met à jour en continu),
+   sans recharger les feuilles Google : seul l'onglet Direct est redessiné. */
+async function refreshCryptoLive() {
+  if (!DATA || document.hidden) return;
+  const ids = [...new Set((DATA.journal.crypto || []).map(p => cgId(p.nom)).filter(Boolean))];
+  if (!ids.length) return;
+  try {
+    DATA.cryptoQuotes = await fetchCryptoQuotes(ids);
+    DATA.cryptoLiveError = null;
+    renderDirect();
+    renderPatrimoine();
+    fillHeroAndCards();
+  } catch (err) {
+    console.warn('CoinGecko', err);
+  }
+}
+setInterval(refreshCryptoLive, 60 * 1000);
+</script>
+</body>
+</html>
