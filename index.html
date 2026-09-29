@@ -190,6 +190,48 @@
   @media (max-width: 760px) { .direct-split { grid-template-columns: 1fr; } }
   .group-total { float: right; font-size: 12px; font-weight: 600; color: var(--muted); }
   .empty-group { font-size: 12px; color: var(--muted); padding: 8px 0; }
+
+  /* --- Sous-onglet Catalyseurs (onglet Bourse) --- */
+  .seg-badge { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 7px; margin-left: 5px; }
+  .seg-badge.urgent { background: rgba(251,113,133,0.18); color: var(--red); }
+  .seg-badge.soon { background: rgba(245,158,11,0.18); color: var(--orange); }
+  .seg-badge.later { background: rgba(139,152,172,0.16); color: var(--muted); }
+  .cat-hero .value.urgent { color: var(--red); }
+  .cat-hero .value.soon { color: var(--orange); }
+  .cat-hero .value.later { color: var(--text); }
+  .cat-hero .sub b { color: var(--text); }
+  .tl { position: relative; }
+  .tl-months { position: relative; height: 16px; margin-left: 92px; font-size: 10px; color: var(--muted); }
+  .tl-months span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .tl-lane { display: flex; align-items: center; height: 30px; border-top: 1px solid var(--border); }
+  .tl-name { width: 92px; flex-shrink: 0; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 6px; }
+  .tl-track { position: relative; flex: 1; height: 100%; }
+  .tl-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); opacity: 0.5; }
+  .tl-today { position: absolute; top: 16px; bottom: 0; width: 2px; background: var(--gold); margin-left: 92px; }
+  .tl-dot { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; border: 2px solid var(--navy-light); }
+  .tl-dot.past { opacity: 0.35; }
+  .tl-dot.nodate { background: transparent !important; border: 2px dashed var(--muted); }
+  .cat-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .cat-item:last-child { border-bottom: none; }
+  .cat-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .cat-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+  .cat-ev { font-size: 12.5px; color: var(--text); margin-top: 4px; }
+  .cat-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .cat-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 8px; white-space: nowrap; }
+  .cat-badge.urgent { background: rgba(251,113,133,0.16); color: var(--red); }
+  .cat-badge.soon { background: rgba(245,158,11,0.16); color: var(--orange); }
+  .cat-badge.later { background: rgba(139,152,172,0.14); color: var(--muted); }
+  .cat-badge.past { background: rgba(139,152,172,0.08); color: var(--muted); }
+  .cat-obj { margin-top: 8px; }
+  .cat-obj-line { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .cat-obj-line b { color: var(--text); }
+  .cat-obj-line b.pos { color: var(--green); }
+  .cat-bar { height: 6px; background: var(--navy-lighter); border-radius: 3px; overflow: hidden; }
+  .cat-bar div { height: 100%; background: var(--gold); border-radius: 3px; }
+  .cat-bar div.done { background: var(--green); }
+  .cat-todo { font-size: 11.5px; color: var(--gold); margin-top: 7px; }
+  details.cat-past summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 0; }
+  details.cat-past .cat-item { opacity: 0.55; }
 </style>
 </head>
 <body>
@@ -261,6 +303,11 @@
 
     <!-- BOURSE (ancien Résumé) -->
     <div class="view" id="view-overview">
+      <div class="segmented" id="bourseSeg">
+        <button class="active" data-sub="bilan">Bilan</button>
+        <button data-sub="catalyseurs" id="segCatalyseurs">Catalyseurs</button>
+      </div>
+      <div id="bourse-bilan">
       <div class="hero">
         <div class="label">Gain cumulé total (CT + PEA + Crypto)</div>
         <div class="value pos" id="totalGain">—</div>
@@ -316,6 +363,24 @@
           <path d="M7 17L17 7M7 7h10v10"></path>
         </svg>
       </a>
+      </div>
+      <div id="bourse-catalyseurs" style="display:none">
+      <div id="catWarn"></div>
+      <div class="hero cat-hero">
+        <div class="label">Prochain catalyseur</div>
+        <div class="value" id="cat-next-j">—</div>
+        <div class="sub" id="cat-next-txt">&nbsp;</div>
+      </div>
+      <div class="chart-card">
+        <h3>Frise des échéances <span class="group-total" style="color:var(--gold)">│ aujourd'hui</span></h3>
+        <div id="catTimeline"></div>
+      </div>
+      <div class="chart-card">
+        <h3>À venir</h3>
+        <div id="catList"></div>
+      </div>
+      <div id="catPast"></div>
+      </div>
     </div>
 
     <!-- REPARTITION -->
@@ -447,10 +512,12 @@ const GID = {
   crypto:     '148683002',   // feuille "Crypto"
   comptes:    '241268954',   // feuille "Comptes"
   direct:     '145186717',   // feuille "Suivi direct"
-  historique: '263962098'    // feuille "Historique Latent"
+  historique: '263962098',   // feuille "Historique Latent"
+  catalyseurs: '406513180'   // feuille "Catalyseurs"
 };
 const NOMS_FEUILLES = { tableau: 'Tableau de bord', ct: 'Compte-Titres', pea: 'PEA', crypto: 'Crypto',
-                        comptes: 'Comptes', direct: 'Suivi direct', historique: 'Historique Latent' };
+                        comptes: 'Comptes', direct: 'Suivi direct', historique: 'Historique Latent',
+                        catalyseurs: 'Catalyseurs' };
 const CSV_URLS = Object.fromEntries(Object.entries(GID).map(([k, g]) =>
   [k, `${PUB}?gid=${g}&single=true&output=csv`]));
 const gidManquant = k => !/^\d+$/.test(String(GID[k]).trim());
@@ -797,6 +864,19 @@ async function loadAllData() {
     }
   }
 
+  // Feuille "Catalyseurs" : chargée à part, facultative.
+  let catalyseurs = [], catalyseursError = null;
+  if (gidManquant('catalyseurs')) {
+    catalyseursError = 'lien-non-configuré';
+  } else {
+    try {
+      catalyseurs = parseCatalyseurs(await fetchCsv(CSV_URLS.catalyseurs));
+      if (!catalyseurs.length) catalyseursError = 'feuille-vide';
+    } catch (err) {
+      catalyseursError = err.message;
+    }
+  }
+
   // Cours et historique CoinGecko pour les cryptos détenues
   const ids = [...new Set(cryptoJournal.positions.map(p => cgId(p.nom)).filter(Boolean))];
   let cryptoQuotes = {}, cryptoHistory = {}, cryptoLiveError = null;
@@ -845,7 +925,9 @@ async function loadAllData() {
     direct,
     directError,
     historique,
-    historiqueError
+    historiqueError,
+    catalyseurs,
+    catalyseursError
   };
 }
 
@@ -1793,6 +1875,168 @@ function cryptoErrorHtml() {
     Vérifie qu'elle est bien publiée sur le web au format CSV.</div>`;
 }
 
+/* ==================== CATALYSEURS ====================
+   Feuille "Catalyseurs" : ligne d'en-têtes commençant par "Action", puis une ligne
+   par événement. A = Action, B = Événement, C = Date (jj/mm/aaaa, vide si aucune
+   date annoncée), D = Échéance (ignorée, recalculée ici), E = Cours, F = Objectif,
+   G = Potentiel (recalculé ici), H = À faire, I = Ticker. */
+const CAT_COULEURS = ['#C7A34C', '#60A5FA', '#A78BFA', '#4ADE80', '#F59E0B', '#FB7185', '#2DD4BF', '#F472B6'];
+const escHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function parseCatalyseurs(rows) {
+  const h = rows.findIndex(r => normKey(r[0]) === 'action');
+  if (h < 0) return [];
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return rows.slice(h + 1)
+    .filter(r => r[0] && String(r[0]).trim())
+    .map(r => {
+      const iso = parseDateWithFormat(r[2], 'DMY');
+      const date = iso ? new Date(iso + 'T00:00:00') : null;
+      const jours = date ? Math.round((date - today) / 86400000) : null;
+      const cours = parseNumOrNull(r[4]);
+      const objectif = parseNumOrNull(r[5]);
+      return {
+        action: String(r[0]).trim(),
+        evenement: String(r[1] || '').trim(),
+        date, iso, jours,
+        cours: cours && cours > 0 ? cours : null,
+        objectif: objectif && objectif > 0 ? objectif : null,
+        aFaire: String(r[7] || '').trim()
+      };
+    });
+}
+
+function catNiveau(j) {
+  if (j === null) return 'later';
+  if (j < 0) return 'past';
+  if (j <= 7) return 'urgent';
+  if (j <= 30) return 'soon';
+  return 'later';
+}
+function catBadge(e) {
+  if (e.jours === null) return '<span class="cat-badge later">Sans date</span>';
+  if (e.jours < 0) return '<span class="cat-badge past">Passé</span>';
+  if (e.jours === 0) return '<span class="cat-badge urgent">Aujourd\'hui</span>';
+  return `<span class="cat-badge ${catNiveau(e.jours)}">J-${e.jours}</span>`;
+}
+
+function catItemHtml(e, couleur) {
+  let obj = '';
+  if (e.objectif && e.cours) {
+    const pot = e.objectif / e.cours - 1;
+    const avance = Math.min(e.cours / e.objectif, 1);
+    obj = `<div class="cat-obj">
+      <div class="cat-obj-line"><span>Cours <b>${fmt(e.cours)}</b></span>
+        <span>Objectif <b>${fmt(e.objectif)}</b> · <b class="${pot <= 0 ? 'pos' : ''}">${pot <= 0 ? 'atteint' : fmtPct(pot)}</b></span></div>
+      <div class="cat-bar"><div class="${pot <= 0 ? 'done' : ''}" style="width:${(avance * 100).toFixed(1)}%"></div></div>
+    </div>`;
+  } else if (e.objectif) {
+    obj = `<div class="cat-meta">Objectif ${fmt(e.objectif)}</div>`;
+  }
+  return `<div class="cat-item">
+    <div class="cat-top">
+      <div class="cat-name"><span class="legend-dot" style="background:${couleur}"></span>${escHtml(e.action)}</div>
+      ${catBadge(e)}
+    </div>
+    <div class="cat-ev">${escHtml(e.evenement)}</div>
+    <div class="cat-meta">${e.date ? e.date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Aucune date annoncée'}</div>
+    ${obj}
+    ${e.aFaire ? `<div class="cat-todo">→ ${escHtml(e.aFaire)}</div>` : ''}
+  </div>`;
+}
+
+function renderCatalyseurs() {
+  const warn = document.getElementById('catWarn');
+  const list = DATA.catalyseurs || [];
+  warn.innerHTML = '';
+  if (DATA.catalyseursError === 'lien-non-configuré') {
+    warn.innerHTML = `<div class="warn-box"><b>Feuille "Catalyseurs" pas encore reliée.</b><br>
+      Renseigne <code>GID.catalyseurs</code> en haut du code (le nombre après <code>#gid=</code>
+      quand tu ouvres l'onglet "Catalyseurs").</div>`;
+  } else if (DATA.catalyseursError && DATA.catalyseursError !== 'feuille-vide') {
+    warn.innerHTML = `<div class="warn-box">Impossible de lire la feuille "Catalyseurs" — ${escHtml(DATA.catalyseursError)}.<br>
+      Vérifie qu'elle est bien publiée sur le web au format CSV.</div>`;
+  }
+
+  // Une couleur par action, dans l'ordre d'apparition
+  const actions = [...new Set(list.map(e => e.action))];
+  const couleurOf = a => CAT_COULEURS[actions.indexOf(a) % CAT_COULEURS.length];
+
+  const aVenir = list.filter(e => e.jours === null || e.jours >= 0)
+    .sort((a, b) => (a.jours === null) - (b.jours === null) || a.jours - b.jours);
+  const passes = list.filter(e => e.jours !== null && e.jours < 0).sort((a, b) => b.jours - a.jours);
+
+  // Bandeau : prochain événement daté (tous ceux du même jour)
+  const jEl = document.getElementById('cat-next-j');
+  const txtEl = document.getElementById('cat-next-txt');
+  const dates = aVenir.filter(e => e.jours !== null);
+  if (dates.length) {
+    const j0 = dates[0].jours;
+    const memes = dates.filter(e => e.jours === j0);
+    jEl.textContent = j0 === 0 ? "Aujourd'hui" : 'J-' + j0;
+    jEl.className = 'value ' + catNiveau(j0);
+    txtEl.innerHTML = memes.map(e => `<b>${escHtml(e.action)}</b> · ${escHtml(e.evenement)}`).join('<br>') +
+      '<br>' + memes[0].date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  } else {
+    jEl.textContent = '—'; jEl.className = 'value';
+  }
+  const seg = document.getElementById('segCatalyseurs');
+  if (dates.length) {
+    const j0 = dates[0].jours;
+    seg.innerHTML = `Catalyseurs<span class="seg-badge ${catNiveau(j0)}">${j0 === 0 ? 'J' : 'J-' + j0}</span>`;
+  } else {
+    seg.textContent = 'Catalyseurs';
+  }
+  if (!dates.length) {
+    txtEl.innerHTML = list.length ? 'Aucun événement daté à venir' : '&nbsp;';
+  }
+
+  // Frise : une ligne par action, du début du mois courant au mois qui suit le dernier événement
+  const tl = document.getElementById('catTimeline');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const debut = new Date(today.getFullYear(), today.getMonth(), 1);
+  const dernier = list.filter(e => e.date && e.date >= debut).map(e => e.date).sort((a, b) => b - a)[0] || today;
+  let fin = new Date(dernier.getFullYear(), dernier.getMonth() + 2, 1);
+  const minFin = new Date(debut.getFullYear(), debut.getMonth() + 6, 1);
+  if (fin < minFin) fin = minFin;
+  const span = fin - debut;
+  const pos = d => Math.max(0, Math.min(100, (d - debut) / span * 100));
+  const nbMois = Math.round(span / (30.44 * 86400000));
+  const pas = nbMois > 12 ? 3 : nbMois > 6 ? 2 : 1;
+  let mois = '', grille = '';
+  for (let i = 0; i < nbMois; i += pas) {
+    const d = new Date(debut.getFullYear(), debut.getMonth() + i, 1);
+    const lab = d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '') +
+      (d.getMonth() === 0 || i === 0 ? ' ' + String(d.getFullYear()).slice(2) : '');
+    mois += `<span style="left:${pos(d)}%">${lab}</span>`;
+    grille += `<div class="tl-grid" style="left:${pos(d)}%"></div>`;
+  }
+  const lanes = actions.map(a => {
+    const dots = list.filter(e => e.action === a).map(e => {
+      const titre = escHtml(`${e.evenement}${e.date ? ' — ' + e.date.toLocaleDateString('fr-FR') : ' — sans date'}`);
+      if (!e.date) return `<div class="tl-dot nodate" style="left:calc(100% - 8px)" title="${titre}"></div>`;
+      if (e.date < debut) return '';
+      return `<div class="tl-dot ${e.jours < 0 ? 'past' : ''}" style="left:${pos(e.date)}%;background:${couleurOf(a)}" title="${titre}"></div>`;
+    }).join('');
+    return `<div class="tl-lane"><div class="tl-name" style="color:${couleurOf(a)}">${escHtml(a)}</div>
+      <div class="tl-track">${grille}${dots}</div></div>`;
+  }).join('');
+  tl.innerHTML = list.length ? `<div class="tl">
+      <div class="tl-months">${mois}</div>
+      ${lanes}
+      <div class="tl-today" style="left:calc((100% - 92px) * ${pos(today) / 100})"></div>
+    </div>` : '<div class="empty-group">Aucun événement.</div>';
+
+  document.getElementById('catList').innerHTML = aVenir.length
+    ? aVenir.map(e => catItemHtml(e, couleurOf(e.action))).join('')
+    : '<div class="empty-group">Rien à venir.</div>';
+  document.getElementById('catPast').innerHTML = passes.length
+    ? `<div class="chart-card"><details class="cat-past"><summary>Passés (${passes.length})</summary>
+        ${passes.map(e => catItemHtml(e, couleurOf(e.action))).join('')}</details></div>`
+    : '';
+}
+
 // Tab navigation
 document.querySelectorAll('nav.tabbar button').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1805,6 +2049,16 @@ document.querySelectorAll('nav.tabbar button').forEach(btn => {
       [chartSecteur, chartGeo, chartEvolution, chartLatent, chartClasses, chartPatrimoine].forEach(c => { if (c) c.resize(); });
     });
   });
+});
+
+// Onglet Bourse : sous-onglets Bilan / Catalyseurs
+document.getElementById('bourseSeg').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  document.querySelectorAll('#bourseSeg button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('bourse-bilan').style.display = btn.dataset.sub === 'bilan' ? '' : 'none';
+  document.getElementById('bourse-catalyseurs').style.display = btn.dataset.sub === 'catalyseurs' ? '' : 'none';
 });
 
 // Account segmented controls
@@ -1847,7 +2101,8 @@ async function refreshAll() {
     renderRepartition();
     renderEvolution();
     renderDirect();
-    timeEl.textContent = 'Actualisé à ' + new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) + ' · v13';
+    renderCatalyseurs();
+    timeEl.textContent = 'Actualisé à ' + new Date().toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}) + ' · v14';
   } catch (err) {
     timeEl.textContent = 'Données reçues, erreur d\'affichage — ' + err.message;
     console.error(err);
