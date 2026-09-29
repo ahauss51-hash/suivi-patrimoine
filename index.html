@@ -1354,30 +1354,41 @@ function renderPatrimoineHistorique(comptes, totalActuel) {
 
   const ctx = document.getElementById('chartPatrimoine').getContext('2d');
   if (chartPatrimoine) chartPatrimoine.destroy();
+  // Une seule courbe : le patrimoine total, toutes classes d'actif confondues.
+  // Avec un seul relevé, une barre (une courbe d'un point ne montre rien).
+  // Le détail par classe reste visible au survol, et dans l'anneau plus haut.
+  const enCourbe = points.length >= 2;
   chartPatrimoine = new Chart(ctx, {
-    type: 'bar',
+    type: enCourbe ? 'line' : 'bar',
     data: {
       labels: points.map(p => moisLabel(p.date) + (p.enCours ? ' *' : '')),
-      datasets: classes.map((k, i) => ({
-        label: k,
-        data: points.map(p => Math.round(p.parClasse[k] * 100) / 100),
-        backgroundColor: classColor(k, i),
-        borderRadius: 3, maxBarThickness: 46
-      }))
+      datasets: [{
+        label: 'Patrimoine total',
+        data: points.map(p => Math.round(p.total * 100) / 100),
+        borderColor: '#C7A34C',
+        backgroundColor: enCourbe ? 'rgba(199,163,76,0.12)' : '#C7A34C',
+        borderWidth: enCourbe ? 2.5 : 0, borderRadius: 3, maxBarThickness: 46,
+        fill: enCourbe, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#C7A34C'
+      }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { color: '#8B98AC', font: { size: 10 } } },
-        y: { stacked: true, grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: { size: 10 },
-             callback: v => v.toLocaleString('fr-FR') + '€' } }
+        x: { grid: { display: false }, ticks: { color: '#8B98AC', font: { size: 10 } } },
+        y: { grid: { color: '#22304A' }, ticks: { color: '#8B98AC', font: { size: 10 },
+             callback: v => v.toLocaleString('fr-FR') + '\u20AC' } }
       },
       plugins: {
-        legend: { labels: { color: '#E8EDF4', font: { size: 11 }, boxWidth: 12 } },
+        legend: { display: false },
         datalabels: { display: false },
         tooltip: { callbacks: {
-          label: c => `${c.dataset.label} : ${fmt(c.raw)}`,
-          footer: items => 'Total : ' + fmt(points[items[0].dataIndex].total)
+          label: c => 'Total : ' + fmt(c.raw),
+          afterBody: items => {
+            const p = points[items[0].dataIndex];
+            return classes.filter(k => Math.abs(p.parClasse[k]) > 0.005)
+              .map(k => `${k} : ${fmt(p.parClasse[k])}`);
+          }
         } }
       }
     }
